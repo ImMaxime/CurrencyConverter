@@ -49,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final _currencyService = CurrencyService();
   late final AnimationController _swapAnimController;
   late final AnimationController _bgAnimController;
+  late final AnimationController _refreshAnimController;
 
   @override
   void initState() {
@@ -61,6 +62,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(seconds: 8),
     )..repeat(reverse: true);
+    _refreshAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    );
     _fetchRate();
     _loadBannerAd();
   }
@@ -88,10 +93,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _error = null;
       _usingCache = false;
     });
+    _startRefreshAnimation();
 
     final result = await _currencyService.fetchRate(_fromCurrency, _toCurrency);
 
     if (!mounted) return;
+
+    _stopRefreshAnimation();
 
     setState(() {
       _loading = false;
@@ -137,11 +145,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return input * (_rate ?? 0);
   }
 
+  void _startRefreshAnimation() {
+    if (!_refreshAnimController.isAnimating) {
+      _refreshAnimController.repeat();
+    }
+  }
+
+  void _stopRefreshAnimation() {
+    if (!_refreshAnimController.isAnimating) return;
+    final progress = _refreshAnimController.value;
+    if (progress == 0.0) {
+      _refreshAnimController.stop();
+      return;
+    }
+    _refreshAnimController
+        .animateTo(
+      1.0,
+      duration: Duration(milliseconds: ((1.0 - progress) * 450).round()),
+      curve: Curves.easeOut,
+    )
+        .then((_) {
+      if (mounted) _refreshAnimController.value = 0;
+    });
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
     _swapAnimController.dispose();
     _bgAnimController.dispose();
+    _refreshAnimController.dispose();
     _bannerAd?.dispose();
     super.dispose();
   }
@@ -210,26 +243,71 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // -- Header --
 
   Widget _buildHeader(TextTheme textTheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          'Currex',
-          style: textTheme.displayMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            letterSpacing: -0.5,
-          ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Currex',
+              style: textTheme.displayMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: -0.5,
+              ),
+            ),
+            Text(
+              'Currency Converter',
+              style: textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w300,
+                color: Colors.white.withAlpha(128),
+                letterSpacing: 1.2,
+              ),
+            ),
+          ],
         ),
-        Text(
-          'Currency Converter',
-          style: textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w300,
-            color: Colors.white.withAlpha(128),
-            letterSpacing: 1.2,
-          ),
-        ),
+        const Spacer(),
+        _buildRefreshButton(),
       ],
+    );
+  }
+
+  Widget _buildRefreshButton() {
+    return Semantics(
+      label: 'Refresh exchange rate',
+      button: true,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        opacity: _loading ? 0.4 : 1.0,
+        child: GestureDetector(
+          onTap: _loading
+              ? null
+              : () {
+                  HapticFeedback.mediumImpact();
+                  _fetchRate();
+                },
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withAlpha(13),
+              border: Border.all(color: Colors.white.withAlpha(26)),
+            ),
+            child: Center(
+              child: RotationTransition(
+                turns: _refreshAnimController,
+                child: Icon(
+                  Icons.refresh_rounded,
+                  color: Colors.white.withAlpha(204),
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -672,7 +750,9 @@ class _SkeletonLineState extends State<_SkeletonLine>
     return AnimatedBuilder(
       animation: _anim,
       builder: (context, child) {
-        final alpha = lerpDouble(_kSkeletonAlphaMin, _kSkeletonAlphaMax, _anim.value)!.round();
+        final alpha =
+            lerpDouble(_kSkeletonAlphaMin, _kSkeletonAlphaMax, _anim.value)!
+                .round();
         return Container(
           width: widget.width,
           height: widget.height,
