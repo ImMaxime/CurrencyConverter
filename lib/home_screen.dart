@@ -413,92 +413,91 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Left: result info
-          Expanded(
-            child: Column(
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  child: Text(
-                    _convertedAmount.toStringAsFixed(2),
-                    key: ValueKey(_convertedAmount.toStringAsFixed(2)),
-                    style: textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: -1,
+          children: [
+            // Left: result info
+            Expanded(
+              child: Column(
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Text(
+                      _convertedAmount.toStringAsFixed(2),
+                      key: ValueKey(_convertedAmount.toStringAsFixed(2)),
+                      style: textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -1,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _toCurrency,
-                  style: textTheme.titleMedium?.copyWith(
-                    color: _kOrbPurple.withAlpha(204),
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(13),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withAlpha(26)),
-                  ),
-                  child: Text(
-                    '1 $_fromCurrency = ${_rate?.toStringAsFixed(4) ?? '—'} $_toCurrency',
-                    textAlign: TextAlign.center,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: Colors.white.withAlpha(179),
+                  const SizedBox(height: 4),
+                  Text(
+                    _toCurrency,
+                    style: textTheme.titleMedium?.copyWith(
+                      color: _kOrbPurple.withAlpha(204),
                       fontWeight: FontWeight.w500,
+                      letterSpacing: 2,
                     ),
                   ),
-                ),
-                if (_usingCache) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.offline_bolt_rounded,
-                        size: 12,
-                        color: Colors.amber.withAlpha(179),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(13),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withAlpha(26)),
+                    ),
+                    child: Text(
+                      '1 $_fromCurrency = ${_rate?.toStringAsFixed(4) ?? '—'} $_toCurrency',
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withAlpha(179),
+                        fontWeight: FontWeight.w500,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Cached rate',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: Colors.amber.withAlpha(179),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
+                  if (_usingCache) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.offline_bolt_rounded,
+                          size: 12,
+                          color: Colors.amber.withAlpha(179),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Cached rate',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: Colors.amber.withAlpha(179),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          // Divider
-          Container(
-            width: 1,
-            color: Colors.white.withAlpha(20),
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-          ),
-          // Right: rate table
-          _RateTable(
-            rate: _rate!,
-            toCurrency: _toCurrency,
-          ),
-        ],
+            // Divider
+            Container(
+              width: 1,
+              color: Colors.white.withAlpha(20),
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            // Right: rate table
+            _RateTable(
+              rate: _rate!,
+              toCurrency: _toCurrency,
+            ),
+          ],
         ),
       ),
     );
   }
-
 }
-
 
 // ===========================================================================
 // RATE TABLE

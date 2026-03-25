@@ -22,7 +22,8 @@ class WidgetService {
     await Future.wait([
       HomeWidget.saveWidgetData<String>('from_currency', fromCurrency),
       HomeWidget.saveWidgetData<String>('to_currency', toCurrency),
-      HomeWidget.saveWidgetData<String>('exchange_rate', rate.toStringAsFixed(4)),
+      HomeWidget.saveWidgetData<String>(
+          'exchange_rate', rate.toStringAsFixed(4)),
       HomeWidget.saveWidgetData<String>('last_updated', 'Updated $now'),
       ...(_tableAmounts.map(
         (a) => HomeWidget.saveWidgetData<String>('rate_$a', _fmt(a * rate)),
