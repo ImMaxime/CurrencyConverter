@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Smallest widget layout: minimal info for 2×1 or narrow placements -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
     android:orientation="vertical"
     android:padding="10dp"
     android:gravity="center_vertical"
+    android:clickable="true"
+    android:focusable="true"
     android:clipChildren="true"
     android:clipToPadding="true">
 
@@ -105,12 +108,6 @@
 
     <TextView
         android:id="@+id/widget_rate_250"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:visibility="gone" />
-
-    <TextView
-        android:id="@+id/widget_rate_label"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:visibility="gone" />
