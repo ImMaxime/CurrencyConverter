@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'currency_service.dart';
 import 'widget_service.dart';
 
@@ -18,6 +19,10 @@ const _kOrbPurple = Color(0xFF7C4DFF);
 const _kOrbBlue = Color(0xFF448AFF);
 const _kOrbPink = Color(0xFFE040FB);
 
+/// Skeleton shimmer alpha range (min/max out of 255, ~4–12% opacity).
+const _kSkeletonAlphaMin = 10;
+const _kSkeletonAlphaMax = 30;
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -33,6 +38,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _loading = false;
   String? _error;
   bool _usingCache = false;
+  bool _isInitialFetch = true;
+
+  BannerAd? _bannerAd;
+  bool _bannerAdLoaded = false;
+
+  // Replace with your production ad unit ID from the AdMob console.
+  static const _bannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
 
   final _currencyService = CurrencyService();
   late final AnimationController _swapAnimController;
@@ -50,6 +62,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       duration: const Duration(seconds: 8),
     )..repeat(reverse: true);
     _fetchRate();
+    _loadBannerAd();
+  }
+
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: _bannerAdUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (_) {
+          if (mounted) setState(() => _bannerAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          _bannerAd = null;
+        },
+      ),
+    )..load();
   }
 
   Future<void> _fetchRate() async {
@@ -72,11 +102,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       }
     });
 
-    if (result.rate != null) {
-      HapticFeedback.lightImpact();
-    } else {
-      HapticFeedback.vibrate();
+    // Skip haptic feedback on the initial silent load; only fire for user-triggered refreshes.
+    if (!_isInitialFetch) {
+      if (result.rate != null) {
+        HapticFeedback.lightImpact();
+      } else {
+        HapticFeedback.vibrate();
+      }
     }
+    _isInitialFetch = false;
 
     if (result.rate != null) {
       await WidgetService.updateWidget(
@@ -108,6 +142,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _amountController.dispose();
     _swapAnimController.dispose();
     _bgAnimController.dispose();
+    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -116,6 +151,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
+      // Banner ad anchored at the bottom
+      bottomNavigationBar: _bannerAdLoaded && _bannerAd != null
+          ? SafeArea(
+              top: false,
+              child: SizedBox(
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                child: AdWidget(ad: _bannerAd!),
+              ),
+            )
+          : null,
       body: Stack(
         children: [
           // Animated gradient background with orbs
@@ -132,8 +178,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     HapticFeedback.mediumImpact();
                     await _fetchRate();
                   },
-                  color: _kOrbPurple,
-                  backgroundColor: const Color(0xFF1A1235),
+                  // Refined, minimal indicator matching the glass dark theme
+                  displacement: 48,
+                  strokeWidth: 1.5,
+                  color: Colors.white.withAlpha(230),
+                  backgroundColor: Colors.white.withAlpha(20),
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.symmetric(horizontal: hPad),
@@ -165,19 +214,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Currency',
-          style: textTheme.displaySmall?.copyWith(
-            fontWeight: FontWeight.w300,
-            color: Colors.white.withAlpha(179),
-            letterSpacing: 1.2,
-          ),
-        ),
-        Text(
-          'Converter',
+          'Currex',
           style: textTheme.displayMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: Colors.white,
             letterSpacing: -0.5,
+          ),
+        ),
+        Text(
+          'Currency Converter',
+          style: textTheme.bodyLarge?.copyWith(
+            fontWeight: FontWeight.w300,
+            color: Colors.white.withAlpha(128),
+            letterSpacing: 1.2,
           ),
         ),
       ],
@@ -342,24 +391,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildLoadingState(TextTheme textTheme) {
     return _GlassCard(
       key: const ValueKey('loading'),
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 36,
-            height: 36,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.5,
-              color: _kOrbPurple.withAlpha(179),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Fetching latest rate…',
-            style: textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withAlpha(128),
-            ),
-          ),
+          // Skeleton: result value line
+          const _SkeletonLine(width: 160, height: 40),
+          const SizedBox(height: 8),
+          // Skeleton: currency label
+          const _SkeletonLine(width: 80, height: 14),
+          const SizedBox(height: 20),
+          // Skeleton: rate badge
+          const _SkeletonLine(width: double.infinity, height: 28),
+          const SizedBox(height: 20),
+          // Skeleton: rate table rows
+          const _SkeletonLine(width: double.infinity, height: 12),
+          const SizedBox(height: 8),
+          const _SkeletonLine(width: double.infinity, height: 12),
+          const SizedBox(height: 8),
+          const _SkeletonLine(width: double.infinity, height: 12),
+          const SizedBox(height: 8),
+          const _SkeletonLine(width: double.infinity, height: 12),
         ],
       ),
     );
@@ -582,6 +634,57 @@ class _RateTable extends StatelessWidget {
 // ===========================================================================
 // GLASSMORPHISM PRIMITIVES
 // ===========================================================================
+
+/// A pulsing skeleton line used as a loading placeholder.
+class _SkeletonLine extends StatefulWidget {
+  const _SkeletonLine({required this.width, required this.height});
+
+  final double width;
+  final double height;
+
+  @override
+  State<_SkeletonLine> createState() => _SkeletonLineState();
+}
+
+class _SkeletonLineState extends State<_SkeletonLine>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, child) {
+        final alpha = lerpDouble(_kSkeletonAlphaMin, _kSkeletonAlphaMax, _anim.value)!.round();
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.height / 2),
+            color: Colors.white.withAlpha(alpha),
+          ),
+        );
+      },
+    );
+  }
+}
 
 /// A frosted glass card with blur, semi-transparent fill, and subtle border.
 /// Reference: background rgba(255,255,255, 0.05–0.15), blur 20–40px,

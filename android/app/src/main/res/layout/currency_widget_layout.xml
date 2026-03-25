@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Glassmorphism widget — compact enough for 2×1 cells, scales up gracefully -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
     android:orientation="vertical"
     android:padding="12dp"
+    android:clickable="true"
+    android:focusable="true"
     android:clipChildren="true"
     android:clipToPadding="true">
 
@@ -21,7 +24,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Currency Converter"
+            android:text="Currex"
             android:textColor="#FFFFFFFF"
             android:textSize="13sp"
             android:textStyle="bold"

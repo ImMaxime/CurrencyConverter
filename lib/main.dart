@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:home_widget/home_widget.dart';
 import 'home_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   HomeWidget.setAppGroupId('com.example.currency_converter');
+  await MobileAds.instance.initialize();
   runApp(const CurrencyConverterApp());
 }
 
@@ -14,7 +16,7 @@ class CurrencyConverterApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Currency Converter',
+      title: 'Currex – Currency Converter',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorSchemeSeed: const Color(0xFF7C4DFF),
