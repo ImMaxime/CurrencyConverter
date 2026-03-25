@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glassmorphism widget — compact enough for 2×1 cells, scales up gracefully -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:clipChildren="true"
+    android:clipToPadding="true">
+
+    <!-- Compact header: title + updated on one row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Currency Converter"
+            android:textColor="#FFFFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/widget_last_updated"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#66FFFFFF"
+            android:textSize="8sp"
+            android:fontFamily="sans-serif"
+            android:singleLine="true" />
+    </LinearLayout>
+
+    <!-- Glass card: everything essential in one compact box -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/widget_glass_card"
+        android:orientation="vertical"
+        android:padding="10dp"
+        android:gravity="center_vertical">
+
+        <!-- Currency pair row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_from_currency"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="USD"
+                android:textColor="#FFFFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:singleLine="true" />
+
+            <!-- Swap icon -->
+            <FrameLayout
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/widget_swap_circle">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:text="⇄"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="10sp" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/widget_to_currency"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="EUR"
+                android:textColor="#CC7C4DFF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:singleLine="true" />
+        </LinearLayout>
+
+        <!-- Rate value -->
+        <TextView
+            android:id="@+id/widget_rate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="--"
+            android:textColor="#FFFFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="-0.03"
+            android:singleLine="true"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="12sp"
+            android:autoSizeMaxTextSize="22sp" />
+
+        <!-- Rate label (e.g. "1 USD = 0.9234 EUR") -->
+        <TextView
+            android:id="@+id/widget_rate_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="1 USD = -- EUR"
+            android:textColor="#80FFFFFF"
+            android:textSize="9sp"
+            android:fontFamily="sans-serif"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <!-- 2×2 rate table: 10, 50, 100, 250 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_rate_10"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="10 → --"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="8sp"
+                    android:fontFamily="sans-serif"
+                    android:singleLine="true" />
+
+                <TextView
+                    android:id="@+id/widget_rate_50"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="50 → --"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="8sp"
+                    android:fontFamily="sans-serif"
+                    android:singleLine="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_rate_100"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="100 → --"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="8sp"
+                    android:fontFamily="sans-serif"
+                    android:singleLine="true" />
+
+                <TextView
+                    android:id="@+id/widget_rate_250"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="250 → --"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="8sp"
+                    android:fontFamily="sans-serif"
+                    android:singleLine="true" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>
