@@ -287,7 +287,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       const SizedBox(height: 24),
                       _buildResultArea(textTheme),
                       const SizedBox(height: 20),
-                      _buildFavoritesAndRecents(textTheme),
+                      _loading && _favorites.isEmpty && _recents.isEmpty
+                          ? _buildFavoritesLoadingState(textTheme)
+                          : _buildFavoritesAndRecents(textTheme),
                       const SizedBox(height: 40),
                     ],
                   ),
@@ -472,6 +474,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildCurrencySelectorCard(TextTheme textTheme) {
     return _GlassCard(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: _GlassCurrencyPicker(
@@ -487,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: RotationTransition(
-              turns: Tween(begin: 0.0, end: 0.5).animate(CurvedAnimation(
+              turns: Tween(begin: 0.0, end: 1.0).animate(CurvedAnimation(
                 parent: _swapAnimController,
                 curve: Curves.easeOutCubic,
               )),
@@ -558,7 +561,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Row(
               children: [
                 Icon(Icons.star_rounded,
-                    size: 14, color: Colors.amber.withAlpha(204)),
+                    size: 14, color: Colors.white.withAlpha(128)),
                 const SizedBox(width: 6),
                 Text(
                   'FAVORITES',
@@ -652,27 +655,100 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildLoadingState(TextTheme textTheme) {
     return _GlassCard(
       key: const ValueKey('loading'),
-      padding: EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Left: mirrors converted-amount column
+            const Expanded(
+              child: Column(
+                children: [
+                  _SkeletonLine(width: 120, height: 42),
+                  SizedBox(height: 4),
+                  _SkeletonLine(width: 52, height: 17),
+                  SizedBox(height: 16),
+                  _SkeletonLine(width: double.infinity, height: 30),
+                ],
+              ),
+            ),
+            // Vertical divider
+            Container(
+              width: 1,
+              color: Colors.white.withAlpha(20),
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            // Right: mirrors rate table
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const _SkeletonLine(width: 28, height: 9),
+                const SizedBox(height: 8),
+                for (final _ in const [0, 1, 2, 3])
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        _SkeletonLine(width: 20, height: 9),
+                        SizedBox(width: 18),
+                        _SkeletonLine(width: 44, height: 9),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFavoritesLoadingState(TextTheme textTheme) {
+    return _GlassCard(
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Skeleton: result value line
-          _SkeletonLine(width: 160, height: 40),
-          SizedBox(height: 8),
-          // Skeleton: currency label
-          _SkeletonLine(width: 80, height: 14),
-          SizedBox(height: 20),
-          // Skeleton: rate badge
-          _SkeletonLine(width: double.infinity, height: 28),
-          SizedBox(height: 20),
-          // Skeleton: rate table rows
-          _SkeletonLine(width: double.infinity, height: 12),
-          SizedBox(height: 8),
-          _SkeletonLine(width: double.infinity, height: 12),
-          SizedBox(height: 8),
-          _SkeletonLine(width: double.infinity, height: 12),
-          SizedBox(height: 8),
-          _SkeletonLine(width: double.infinity, height: 12),
+          // Favorites section header
+          const Row(
+            children: [
+              _SkeletonLine(width: 14, height: 14),
+              SizedBox(width: 6),
+              _SkeletonLine(width: 80, height: 10),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Chip row: mirrors horizontal _PairChip list
+          const Row(
+            children: [
+              _SkeletonLine(width: 92, height: 32),
+              SizedBox(width: 8),
+              _SkeletonLine(width: 92, height: 32),
+              SizedBox(width: 8),
+              _SkeletonLine(width: 92, height: 32),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Container(height: 1, color: Colors.white.withAlpha(20)),
+          ),
+          // Recents section header
+          const Row(
+            children: [
+              _SkeletonLine(width: 14, height: 14),
+              SizedBox(width: 6),
+              _SkeletonLine(width: 56, height: 10),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Recent rows: mirrors _RecentRow (full-width, vertical padding 10)
+          for (final _ in const [0, 1, 2])
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: _SkeletonLine(width: double.infinity, height: 34),
+            ),
         ],
       ),
     );
@@ -803,6 +879,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             // Right: rate table
             _RateTable(
               rate: _rate!,
+              fromCurrency: _fromCurrency,
               toCurrency: _toCurrency,
             ),
           ],
@@ -817,9 +894,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 // ===========================================================================
 
 class _RateTable extends StatelessWidget {
-  const _RateTable({required this.rate, required this.toCurrency});
+  const _RateTable({
+    required this.rate,
+    required this.fromCurrency,
+    required this.toCurrency,
+  });
 
   final double rate;
+  final String fromCurrency;
   final String toCurrency;
 
   static const _amounts = [10, 50, 100, 250];
@@ -838,14 +920,37 @@ class _RateTable extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Text(
-          toCurrency,
-          style: textTheme.labelSmall?.copyWith(
-            color: Colors.white.withAlpha(102),
-            letterSpacing: 2,
-            fontWeight: FontWeight.w600,
-            fontSize: 9,
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 28,
+              child: Text(
+                fromCurrency,
+                textAlign: TextAlign.left,
+                style: textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withAlpha(102),
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 9,
+                ),
+              ),
+            ),
+            const SizedBox(width: 24), // divider gap
+            SizedBox(
+              width: 44,
+              child: Text(
+                toCurrency,
+                textAlign: TextAlign.right,
+                style: textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withAlpha(102),
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 9,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         ..._amounts.map((a) {
@@ -859,7 +964,7 @@ class _RateTable extends StatelessWidget {
                   width: 28,
                   child: Text(
                     '$a',
-                    textAlign: TextAlign.right,
+                    textAlign: TextAlign.left,
                     style: textTheme.labelSmall?.copyWith(
                       color: Colors.white.withAlpha(90),
                       fontSize: 10,
@@ -875,12 +980,16 @@ class _RateTable extends StatelessWidget {
                     color: Colors.white.withAlpha(30),
                   ),
                 ),
-                Text(
-                  converted,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 11,
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    converted,
+                    textAlign: TextAlign.right,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ],
@@ -1234,7 +1343,7 @@ class _RecentRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
           child: Row(
             children: [
               Icon(
@@ -1278,17 +1387,14 @@ class _RecentRow extends StatelessWidget {
                 ),
               Semantics(
                 button: true,
-                label:
-                    'Remove ${pair.from} to ${pair.to} from recent searches',
+                label: 'Remove ${pair.from} to ${pair.to} from recent searches',
                 child: IconButton(
                   icon: const Icon(Icons.close_rounded),
                   iconSize: 16,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withOpacity(0.6),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   onPressed: onRemove,
                 ),
               ),
