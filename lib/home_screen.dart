@@ -650,8 +650,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildLoadingState(TextTheme textTheme) {
-    return const _GlassCard(
-      key: ValueKey('loading'),
+    return _GlassCard(
+      key: const ValueKey('loading'),
       padding: EdgeInsets.symmetric(vertical: 32, horizontal: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
