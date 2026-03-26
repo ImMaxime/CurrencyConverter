@@ -1271,12 +1271,20 @@ class _RecentRow extends StatelessWidget {
                     color: _kOrbPurple.withAlpha(204),
                   ),
                 ),
-              GestureDetector(
-                onTap: onRemove,
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 16,
-                  color: Colors.white.withAlpha(102),
+              Semantics(
+                button: true,
+                label:
+                    'Remove ${pair.from} to ${pair.to} from recent searches',
+                child: IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  iconSize: 16,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withOpacity(0.6),
+                  onPressed: onRemove,
                 ),
               ),
             ],
