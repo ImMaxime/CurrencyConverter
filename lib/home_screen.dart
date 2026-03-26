@@ -182,10 +182,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadFavoritesAndRecents() async {
-    final favorites = await _favoritesService.getFavorites();
-    final recents = await _favoritesService.getRecents();
-    final isFav =
-        await _favoritesService.isFavorite(_fromCurrency, _toCurrency);
+    final favoritesFuture = _favoritesService.getFavorites();
+    final recentsFuture = _favoritesService.getRecents();
+
+    final favorites = await favoritesFuture;
+    final recents = await recentsFuture;
+
+    final isFav = favorites.any(
+      (pair) => pair.from == _fromCurrency && pair.to == _toCurrency,
+    );
     if (mounted) {
       setState(() {
         _favorites = favorites;
