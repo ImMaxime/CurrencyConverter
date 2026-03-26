@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'amount_history_service.dart';
 import 'currency_service.dart';
 import 'favorites_service.dart';
 import 'widget_service.dart';
@@ -49,10 +51,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   final _currencyService = CurrencyService();
   final _favoritesService = FavoritesService();
+  final _amountHistoryService = AmountHistoryService();
 
   List<CurrencyPair> _favorites = [];
   List<CurrencyPair> _recents = [];
   bool _isFavorite = false;
+  List<double> _amountHistory = [];
+  Timer? _historyTimer;
 
   late final AnimationController _swapAnimController;
   late final AnimationController _bgAnimController;
@@ -76,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _fetchRate();
     _loadBannerAd();
     _loadFavoritesAndRecents();
+    _amountController.addListener(_onAmountChanged);
   }
 
   void _loadBannerAd() {
@@ -139,6 +145,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     // Refresh favorite status and recents for the current pair.
     await _loadFavoritesAndRecents();
+    await _loadAmountHistory();
   }
 
   void _swapCurrencies() {
@@ -200,6 +207,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _loadAmountHistory() async {
+    final history =
+        await _amountHistoryService.getHistory(_fromCurrency, _toCurrency);
+    if (mounted) setState(() => _amountHistory = history);
+  }
+
+  void _onAmountChanged() {
+    _historyTimer?.cancel();
+    _historyTimer = Timer(
+      const Duration(milliseconds: 1500),
+      _saveAmountToHistory,
+    );
+  }
+
+  Future<void> _saveAmountToHistory() async {
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null || amount <= 0) return;
+    // Capture currencies before the async gap to avoid saving to the wrong
+    // pair if the user switches currencies while the save is in flight.
+    final from = _fromCurrency;
+    final to = _toCurrency;
+    await _amountHistoryService.addAmount(from, to, amount);
+    if (mounted && _fromCurrency == from && _toCurrency == to) {
+      await _loadAmountHistory();
+    }
+  }
+
+  Future<void> _clearAmountHistory() async {
+    HapticFeedback.lightImpact();
+    await _amountHistoryService.clearHistory(_fromCurrency, _toCurrency);
+    if (mounted) setState(() => _amountHistory = []);
+  }
+
+  String _formatHistoryAmount(double amount) {
+    if (amount == amount.truncateToDouble()) return amount.toInt().toString();
+    return amount.toStringAsFixed(2);
+  }
+
   Future<void> _toggleFavorite() async {
     HapticFeedback.lightImpact();
     await _favoritesService.toggleFavorite(_fromCurrency, _toCurrency);
@@ -229,6 +274,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _historyTimer?.cancel();
     _amountController.dispose();
     _swapAnimController.dispose();
     _bgAnimController.dispose();
@@ -462,6 +508,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
               onChanged: (_) => setState(() {}),
+              onSubmitted: (_) {
+                _historyTimer?.cancel();
+                _saveAmountToHistory();
+              },
             ),
           ),
         ],
@@ -876,12 +926,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: Colors.white.withAlpha(20),
               margin: const EdgeInsets.symmetric(horizontal: 12),
             ),
-            // Right: rate table
-            _RateTable(
-              rate: _rate!,
-              fromCurrency: _fromCurrency,
-              toCurrency: _toCurrency,
-            ),
+            // Right: amount history (when available) or rate table
+            if (_amountHistory.isNotEmpty)
+              _AmountHistoryPanel(
+                history: _amountHistory,
+                rate: _rate!,
+                fromCurrency: _fromCurrency,
+                toCurrency: _toCurrency,
+                onAmountSelected: (amount) {
+                  _amountController.text = _formatHistoryAmount(amount);
+                  setState(() {});
+                },
+                onClear: _clearAmountHistory,
+              )
+            else
+              _RateTable(
+                rate: _rate!,
+                fromCurrency: _fromCurrency,
+                toCurrency: _toCurrency,
+              ),
           ],
         ),
       ),
@@ -993,6 +1056,157 @@ class _RateTable extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+// ===========================================================================
+// AMOUNT HISTORY PANEL
+// ===========================================================================
+
+/// Displays the per-pair history of searched amounts in the result card's
+/// right panel.  Each row is tappable to restore the amount into the input
+/// field.  A clear button removes all entries for the current pair.
+class _AmountHistoryPanel extends StatelessWidget {
+  const _AmountHistoryPanel({
+    required this.history,
+    required this.rate,
+    required this.fromCurrency,
+    required this.toCurrency,
+    required this.onAmountSelected,
+    required this.onClear,
+  });
+
+  final List<double> history;
+  final double rate;
+  final String fromCurrency;
+  final String toCurrency;
+  final ValueChanged<double> onAmountSelected;
+  final VoidCallback onClear;
+
+  /// Maximum number of history rows to render in the right panel.
+  /// We store up to [AmountHistoryService._maxEntries] (8) but only show 5
+  /// to keep the card from growing too tall on small screens.
+  static const _maxDisplayRows = 5;
+
+  String _fmt(double v) {
+    if (v >= 10000) return '${(v / 1000).toStringAsFixed(0)}k';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
+    if (v >= 100) return v.toStringAsFixed(1);
+    return v.toStringAsFixed(2);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final displayHistory = history.take(_maxDisplayRows).toList();
+    final labelStyle = textTheme.labelSmall?.copyWith(
+      color: Colors.white.withAlpha(102),
+      letterSpacing: 2,
+      fontWeight: FontWeight.w600,
+      fontSize: 9,
+    );
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // Section label + clear button
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('HISTORY', style: labelStyle),
+            const SizedBox(width: 6),
+            Semantics(
+              label: 'Clear amount history',
+              button: true,
+              child: GestureDetector(
+                onTap: onClear,
+                child: Icon(
+                  Icons.clear_all_rounded,
+                  size: 12,
+                  color: Colors.white.withAlpha(77),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        // Column headers
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 40,
+              child: Text(fromCurrency, textAlign: TextAlign.left,
+                  style: labelStyle),
+            ),
+            const SizedBox(width: 24),
+            SizedBox(
+              width: 44,
+              child: Text(toCurrency, textAlign: TextAlign.right,
+                  style: labelStyle),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // History rows
+        ...displayHistory.map((amount) {
+          final converted = _fmt(amount * rate);
+          final amountStr = _fmt(amount);
+          return Semantics(
+            label: '$amountStr $fromCurrency = $converted $toCurrency, tap to use',
+            button: true,
+            child: GestureDetector(
+              onTap: () => onAmountSelected(amount),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      child: Text(
+                        amountStr,
+                        textAlign: TextAlign.left,
+                        // labelSmall for the source amount (dimmer, smaller) —
+                        // intentionally matches _RateTable's FROM-column style.
+                        style: textTheme.labelSmall?.copyWith(
+                          color: Colors.white.withAlpha(179),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Container(
+                        width: 12,
+                        height: 1,
+                        color: Colors.white.withAlpha(30),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      child: Text(
+                        converted,
+                        textAlign: TextAlign.right,
+                        // bodySmall for the converted result (brighter, bolder) —
+                        // intentionally matches _RateTable's TO-column style.
+                        style: textTheme.bodySmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           );
         }),
