@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'currency_service.dart';
+import 'favorites_service.dart';
 import 'widget_service.dart';
 
 /// Gradient background colors for the mesh-like backdrop.
@@ -47,6 +48,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   static const _bannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
 
   final _currencyService = CurrencyService();
+  final _favoritesService = FavoritesService();
+
+  List<CurrencyPair> _favorites = [];
+  List<CurrencyPair> _recents = [];
+  bool _isFavorite = false;
+
   late final AnimationController _swapAnimController;
   late final AnimationController _bgAnimController;
   late final AnimationController _refreshAnimController;
@@ -68,6 +75,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
     _fetchRate();
     _loadBannerAd();
+    _loadFavoritesAndRecents();
   }
 
   void _loadBannerAd() {
@@ -126,7 +134,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         toCurrency: _toCurrency,
         rate: result.rate!,
       );
+      await _favoritesService.addRecent(_fromCurrency, _toCurrency);
     }
+
+    // Refresh favorite status and recents for the current pair.
+    await _loadFavoritesAndRecents();
   }
 
   void _swapCurrencies() {
@@ -167,6 +179,47 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         .then((_) {
       if (mounted) _refreshAnimController.value = 0;
     });
+  }
+
+  Future<void> _loadFavoritesAndRecents() async {
+    final favorites = await _favoritesService.getFavorites();
+    final recents = await _favoritesService.getRecents();
+    final isFav =
+        await _favoritesService.isFavorite(_fromCurrency, _toCurrency);
+    if (mounted) {
+      setState(() {
+        _favorites = favorites;
+        _recents = recents;
+        _isFavorite = isFav;
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    HapticFeedback.lightImpact();
+    await _favoritesService.toggleFavorite(_fromCurrency, _toCurrency);
+    await _loadFavoritesAndRecents();
+  }
+
+  Future<void> _removeFavorite(CurrencyPair pair) async {
+    HapticFeedback.lightImpact();
+    await _favoritesService.toggleFavorite(pair.from, pair.to);
+    await _loadFavoritesAndRecents();
+  }
+
+  Future<void> _removeRecent(CurrencyPair pair) async {
+    HapticFeedback.lightImpact();
+    await _favoritesService.removeRecent(pair.from, pair.to);
+    await _loadFavoritesAndRecents();
+  }
+
+  void _loadPair(CurrencyPair pair) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _fromCurrency = pair.from;
+      _toCurrency = pair.to;
+    });
+    _fetchRate();
   }
 
   @override
@@ -228,6 +281,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       _buildCurrencySelectorCard(textTheme),
                       const SizedBox(height: 24),
                       _buildResultArea(textTheme),
+                      const SizedBox(height: 20),
+                      _buildFavoritesAndRecents(textTheme),
                       const SizedBox(height: 40),
                     ],
                   ),
@@ -268,8 +323,50 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
         const Spacer(),
+        _buildFavoriteButton(),
+        const SizedBox(width: 8),
         _buildRefreshButton(),
       ],
+    );
+  }
+
+  Widget _buildFavoriteButton() {
+    return Semantics(
+      label: _isFavorite ? 'Remove from favorites' : 'Add to favorites',
+      button: true,
+      child: GestureDetector(
+        onTap: _toggleFavorite,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _isFavorite
+                ? Colors.amber.withAlpha(31)
+                : Colors.white.withAlpha(13),
+            border: Border.all(
+              color: _isFavorite
+                  ? Colors.amber.withAlpha(102)
+                  : Colors.white.withAlpha(26),
+            ),
+          ),
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                _isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+                key: ValueKey(_isFavorite),
+                color: _isFavorite
+                    ? Colors.amber.withAlpha(230)
+                    : Colors.white.withAlpha(204),
+                size: 22,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -439,6 +536,87 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  // -- Favorites & Recents --
+
+  Widget _buildFavoritesAndRecents(TextTheme textTheme) {
+    if (_favorites.isEmpty && _recents.isEmpty) return const SizedBox.shrink();
+
+    final nonFavRecents =
+        _recents.where((pair) => !_favorites.contains(pair)).take(5).toList();
+
+    return _GlassCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_favorites.isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(Icons.star_rounded,
+                    size: 14, color: Colors.amber.withAlpha(204)),
+                const SizedBox(width: 6),
+                Text(
+                  'FAVORITES',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withAlpha(128),
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _favorites
+                    .map((pair) => _PairChip(
+                          pair: pair,
+                          onTap: () => _loadPair(pair),
+                          onRemove: () => _removeFavorite(pair),
+                          highlight: pair.from == _fromCurrency &&
+                              pair.to == _toCurrency,
+                        ))
+                    .toList(),
+              ),
+            ),
+          ],
+          if (_favorites.isNotEmpty &&
+              _recents.isNotEmpty &&
+              nonFavRecents.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Container(height: 1, color: Colors.white.withAlpha(20)),
+            ),
+          if (_recents.isNotEmpty && nonFavRecents.isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(Icons.history_rounded,
+                    size: 14, color: Colors.white.withAlpha(128)),
+                const SizedBox(width: 6),
+                Text(
+                  'RECENT',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withAlpha(128),
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...nonFavRecents.map((pair) => _RecentRow(
+                  pair: pair,
+                  onTap: () => _loadPair(pair),
+                  onRemove: () => _removeRecent(pair),
+                  active: pair.from == _fromCurrency && pair.to == _toCurrency,
+                )),
+          ],
+        ],
+      ),
+    );
+  }
+
   // -- Result Area --
 
   Widget _buildResultArea(TextTheme textTheme) {
@@ -467,29 +645,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildLoadingState(TextTheme textTheme) {
-    return _GlassCard(
-      key: const ValueKey('loading'),
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+    return const _GlassCard(
+      key: ValueKey('loading'),
+      padding: EdgeInsets.symmetric(vertical: 32, horizontal: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Skeleton: result value line
-          const _SkeletonLine(width: 160, height: 40),
-          const SizedBox(height: 8),
+          _SkeletonLine(width: 160, height: 40),
+          SizedBox(height: 8),
           // Skeleton: currency label
-          const _SkeletonLine(width: 80, height: 14),
-          const SizedBox(height: 20),
+          _SkeletonLine(width: 80, height: 14),
+          SizedBox(height: 20),
           // Skeleton: rate badge
-          const _SkeletonLine(width: double.infinity, height: 28),
-          const SizedBox(height: 20),
+          _SkeletonLine(width: double.infinity, height: 28),
+          SizedBox(height: 20),
           // Skeleton: rate table rows
-          const _SkeletonLine(width: double.infinity, height: 12),
-          const SizedBox(height: 8),
-          const _SkeletonLine(width: double.infinity, height: 12),
-          const SizedBox(height: 8),
-          const _SkeletonLine(width: double.infinity, height: 12),
-          const SizedBox(height: 8),
-          const _SkeletonLine(width: double.infinity, height: 12),
+          _SkeletonLine(width: double.infinity, height: 12),
+          SizedBox(height: 8),
+          _SkeletonLine(width: double.infinity, height: 12),
+          SizedBox(height: 8),
+          _SkeletonLine(width: double.infinity, height: 12),
+          SizedBox(height: 8),
+          _SkeletonLine(width: double.infinity, height: 12),
         ],
       ),
     );
@@ -931,6 +1109,187 @@ class _GlassCurrencyPicker extends StatelessWidget {
     );
   }
 }
+
+// ===========================================================================
+// PAIR CHIP — used in the Favorites horizontal scroll row
+// ===========================================================================
+
+class _PairChip extends StatelessWidget {
+  const _PairChip({
+    required this.pair,
+    required this.onTap,
+    required this.onRemove,
+    required this.highlight,
+  });
+
+  final CurrencyPair pair;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final fromFlag = CurrencyService.currencyFlags[pair.from] ?? '';
+    final toFlag = CurrencyService.currencyFlags[pair.to] ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Semantics(
+        label: '${pair.from} to ${pair.to}',
+        button: true,
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              color: highlight
+                  ? _kOrbPurple.withAlpha(51)
+                  : Colors.white.withAlpha(13),
+              border: Border.all(
+                color: highlight
+                    ? _kOrbPurple.withAlpha(128)
+                    : Colors.white.withAlpha(26),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$fromFlag ${pair.from}',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: highlight ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 12,
+                    color: Colors.white.withAlpha(128),
+                  ),
+                ),
+                Text(
+                  '$toFlag ${pair.to}',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: highlight ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: onRemove,
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 14,
+                    color: Colors.white.withAlpha(128),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// RECENT ROW — used in the Recent searches list
+// ===========================================================================
+
+class _RecentRow extends StatelessWidget {
+  const _RecentRow({
+    required this.pair,
+    required this.onTap,
+    required this.onRemove,
+    required this.active,
+  });
+
+  final CurrencyPair pair;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final fromFlag = CurrencyService.currencyFlags[pair.from] ?? '';
+    final toFlag = CurrencyService.currencyFlags[pair.to] ?? '';
+    final textTheme = Theme.of(context).textTheme;
+
+    return Semantics(
+      label: '${pair.from} to ${pair.to} recent search',
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          child: Row(
+            children: [
+              Icon(
+                Icons.history_rounded,
+                size: 14,
+                color: Colors.white.withAlpha(77),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '$fromFlag ${pair.from}',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withAlpha(active ? 255 : 179),
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 12,
+                  color: Colors.white.withAlpha(77),
+                ),
+              ),
+              Text(
+                '$toFlag ${pair.to}',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withAlpha(active ? 255 : 179),
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+              const Spacer(),
+              if (active)
+                Container(
+                  width: 6,
+                  height: 6,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _kOrbPurple.withAlpha(204),
+                  ),
+                ),
+              GestureDetector(
+                onTap: onRemove,
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: Colors.white.withAlpha(102),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// ANIMATED BACKGROUND
+// ===========================================================================
 
 /// Animated background with a dark gradient and floating color orbs.
 class _AnimatedGradientBackground extends StatelessWidget {
