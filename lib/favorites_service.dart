@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CurrencyPair {
@@ -27,11 +28,7 @@ class FavoritesService {
 
   Future<List<CurrencyPair>> getFavorites() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_favoritesKey) ?? [];
-    return raw
-        .map(
-            (e) => CurrencyPair.fromJson(jsonDecode(e) as Map<String, dynamic>))
-        .toList();
+    return _parseAndCleanPairs(prefs, _favoritesKey);
   }
 
   Future<bool> isFavorite(String from, String to) async {
@@ -56,11 +53,30 @@ class FavoritesService {
 
   Future<List<CurrencyPair>> getRecents() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList(_recentsKey) ?? [];
-    return raw
-        .map(
-            (e) => CurrencyPair.fromJson(jsonDecode(e) as Map<String, dynamic>))
-        .toList();
+    return _parseAndCleanPairs(prefs, _recentsKey);
+  }
+
+  /// Parses the stored JSON strings for [key] into [CurrencyPair]s,
+  /// skipping and logging any invalid entries. If entries were skipped
+  /// the cleaned list is written back to [prefs] to self-heal the data.
+  Future<List<CurrencyPair>> _parseAndCleanPairs(
+      SharedPreferences prefs, String key) async {
+    final raw = prefs.getStringList(key) ?? [];
+    final pairs = <CurrencyPair>[];
+    for (final e in raw) {
+      try {
+        pairs.add(CurrencyPair.fromJson(jsonDecode(e) as Map<String, dynamic>));
+      } catch (err, stack) {
+        debugPrint('FavoritesService: skipping invalid entry for key "$key": $err\n$stack');
+      }
+    }
+    if (pairs.length != raw.length) {
+      await prefs.setStringList(
+        key,
+        pairs.map((p) => jsonEncode(p.toJson())).toList(),
+      );
+    }
+    return pairs;
   }
 
   Future<void> addRecent(String from, String to) async {
