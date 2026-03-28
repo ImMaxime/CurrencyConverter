@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'amount_history_service.dart';
 import 'currency_service.dart';
 import 'favorites_service.dart';
+import 'quick_rates_service.dart';
 import 'widget_service.dart';
 
 /// Gradient background colors for the mesh-like backdrop.
@@ -49,10 +52,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   final _currencyService = CurrencyService();
   final _favoritesService = FavoritesService();
+  final _amountHistoryService = AmountHistoryService();
+  final _quickRatesService = QuickRatesService();
 
   List<CurrencyPair> _favorites = [];
   List<CurrencyPair> _recents = [];
   bool _isFavorite = false;
+  List<double> _amountHistory = [];
+  Timer? _historyTimer;
+  List<int> _quickRateAmounts = List.of(QuickRatesService.defaultAmounts);
+  bool _hasCustomQuickRates = false;
 
   late final AnimationController _swapAnimController;
   late final AnimationController _bgAnimController;
@@ -76,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _fetchRate();
     _loadBannerAd();
     _loadFavoritesAndRecents();
+    _amountController.addListener(_onAmountChanged);
   }
 
   void _loadBannerAd() {
@@ -139,6 +149,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     // Refresh favorite status and recents for the current pair.
     await _loadFavoritesAndRecents();
+    await _loadAmountHistory();
+    await _loadQuickRates();
   }
 
   void _swapCurrencies() {
@@ -200,6 +212,84 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _loadAmountHistory() async {
+    final history =
+        await _amountHistoryService.getHistory(_fromCurrency, _toCurrency);
+    if (mounted) setState(() => _amountHistory = history);
+  }
+
+  void _onAmountChanged() {
+    _historyTimer?.cancel();
+    _historyTimer = Timer(
+      const Duration(milliseconds: 1500),
+      _saveAmountToHistory,
+    );
+  }
+
+  Future<void> _saveAmountToHistory() async {
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null || amount <= 0) return;
+    // Capture currencies before the async gap to avoid saving to the wrong
+    // pair if the user switches currencies while the save is in flight.
+    final from = _fromCurrency;
+    final to = _toCurrency;
+    await _amountHistoryService.addAmount(from, to, amount);
+    if (mounted && _fromCurrency == from && _toCurrency == to) {
+      await _loadAmountHistory();
+    }
+  }
+
+  Future<void> _clearAmountHistory() async {
+    HapticFeedback.lightImpact();
+    await _amountHistoryService.clearHistory(_fromCurrency, _toCurrency);
+    if (mounted) setState(() => _amountHistory = []);
+  }
+
+  Future<void> _loadQuickRates() async {
+    final amounts =
+        await _quickRatesService.getAmounts(_fromCurrency, _toCurrency);
+    final isCustom =
+        await _quickRatesService.hasCustomAmounts(_fromCurrency, _toCurrency);
+    if (mounted) {
+      setState(() {
+        _quickRateAmounts = amounts;
+        _hasCustomQuickRates = isCustom;
+      });
+    }
+  }
+
+  Future<void> _saveCurrentAmountToQuickRates() async {
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null || amount <= 0) return;
+    final rounded = amount.round();
+    if (rounded <= 0) return;
+    HapticFeedback.lightImpact();
+    await _quickRatesService.addAmount(_fromCurrency, _toCurrency, rounded);
+    await _loadQuickRates();
+  }
+
+  Future<void> _resetQuickRates() async {
+    HapticFeedback.lightImpact();
+    await _quickRatesService.resetToDefaults(_fromCurrency, _toCurrency);
+    if (mounted) {
+      setState(() {
+        _quickRateAmounts = List.of(QuickRatesService.defaultAmounts);
+        _hasCustomQuickRates = false;
+      });
+    }
+  }
+
+  Future<void> _removeQuickRate(int amount) async {
+    HapticFeedback.lightImpact();
+    await _quickRatesService.removeAmount(_fromCurrency, _toCurrency, amount);
+    await _loadQuickRates();
+  }
+
+  String _formatHistoryAmount(double amount) {
+    if (amount == amount.truncateToDouble()) return amount.toInt().toString();
+    return amount.toStringAsFixed(2);
+  }
+
   Future<void> _toggleFavorite() async {
     HapticFeedback.lightImpact();
     await _favoritesService.toggleFavorite(_fromCurrency, _toCurrency);
@@ -229,6 +319,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _historyTimer?.cancel();
     _amountController.dispose();
     _swapAnimController.dispose();
     _bgAnimController.dispose();
@@ -264,35 +355,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               builder: (context, constraints) {
                 final isWide = constraints.maxWidth > 600;
                 final hPad = isWide ? constraints.maxWidth * 0.15 : 24.0;
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    HapticFeedback.mediumImpact();
-                    await _fetchRate();
-                  },
-                  // Refined, minimal indicator matching the glass dark theme
-                  displacement: 48,
-                  strokeWidth: 1.5,
-                  color: Colors.white.withAlpha(230),
-                  backgroundColor: Colors.white.withAlpha(20),
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.symmetric(horizontal: hPad),
-                    children: [
-                      const SizedBox(height: 48),
-                      _buildHeader(textTheme),
-                      const SizedBox(height: 32),
-                      _buildAmountCard(textTheme),
-                      const SizedBox(height: 20),
-                      _buildCurrencySelectorCard(textTheme),
-                      const SizedBox(height: 24),
-                      _buildResultArea(textTheme),
-                      const SizedBox(height: 20),
-                      _loading && _favorites.isEmpty && _recents.isEmpty
-                          ? _buildFavoritesLoadingState(textTheme)
-                          : _buildFavoritesAndRecents(textTheme),
-                      const SizedBox(height: 40),
-                    ],
-                  ),
+                return Column(
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(hPad, 48, hPad, 0),
+                      child: _buildHeader(textTheme),
+                    ),
+                    const SizedBox(height: 32),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          HapticFeedback.mediumImpact();
+                          await _fetchRate();
+                        },
+                        // Refined, minimal indicator matching the glass dark theme
+                        displacement: 48,
+                        strokeWidth: 1.5,
+                        color: Colors.white.withAlpha(230),
+                        backgroundColor: Colors.white.withAlpha(20),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: EdgeInsets.symmetric(horizontal: hPad),
+                          children: [
+                            _buildAmountCard(textTheme),
+                            const SizedBox(height: 20),
+                            _buildCurrencySelectorCard(textTheme),
+                            const SizedBox(height: 24),
+                            _buildResultArea(textTheme),
+                            const SizedBox(height: 20),
+                            _loading && _favorites.isEmpty && _recents.isEmpty
+                                ? _buildFavoritesLoadingState(textTheme)
+                                : _buildFavoritesAndRecents(textTheme),
+                            const SizedBox(height: 40),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -422,13 +521,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'AMOUNT',
-            style: textTheme.labelSmall?.copyWith(
-              color: Colors.white.withAlpha(128),
-              letterSpacing: 2,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            children: [
+              Text(
+                'AMOUNT',
+                style: textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withAlpha(128),
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _saveCurrentAmountToQuickRates,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline_rounded,
+                        size: 14,
+                        color: Colors.white.withAlpha(128),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'QUICK RATE',
+                        style: textTheme.labelSmall?.copyWith(
+                          color: Colors.white.withAlpha(128),
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Semantics(
@@ -462,6 +592,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
               onChanged: (_) => setState(() {}),
+              onSubmitted: (_) {
+                _historyTimer?.cancel();
+                _saveAmountToHistory();
+              },
             ),
           ),
         ],
@@ -628,41 +762,78 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // -- Result Area --
 
   Widget _buildResultArea(TextTheme textTheme) {
+    // Determine the child to display:
+    // - Error takes priority
+    // - Show loading skeleton only on initial fetch (no rate yet)
+    // - Otherwise show success state, dimmed while refreshing
+    final Widget child;
+    if (_error != null && !_loading) {
+      child = _buildErrorState(textTheme);
+    } else if (_rate == null && _loading) {
+      child = _buildLoadingState(textTheme);
+    } else if (_rate == null && _error != null) {
+      child = _buildErrorState(textTheme);
+    } else if (_rate != null) {
+      child = AnimatedOpacity(
+        key: ValueKey('success-$_fromCurrency-$_toCurrency'),
+        duration: const Duration(milliseconds: 250),
+        opacity: _loading ? 0.5 : 1.0,
+        child: _buildSuccessState(textTheme),
+      );
+    } else {
+      child = _buildLoadingState(textTheme);
+    }
+
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 400),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          alignment: Alignment.topCenter,
+          clipBehavior: Clip.none,
+          children: [
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        );
+      },
       transitionBuilder: (child, animation) {
         return FadeTransition(
           opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.05),
-              end: Offset.zero,
-            ).animate(animation),
-            child: child,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axisAlignment: -1.0,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.05),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              )),
+              child: child,
+            ),
           ),
         );
       },
-      child: _loading
-          ? _buildLoadingState(textTheme)
-          : _error != null
-              ? _buildErrorState(textTheme)
-              : _buildSuccessState(textTheme),
+      child: child,
     );
   }
 
   Widget _buildLoadingState(TextTheme textTheme) {
     return _GlassCard(
       key: const ValueKey('loading'),
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-      child: IntrinsicHeight(
+      padding: const EdgeInsets.all(20),
+      child: SizedBox(
+        height: 142,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Left: mirrors converted-amount column
             const Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _SkeletonLine(width: 120, height: 42),
                   SizedBox(height: 4),
@@ -798,24 +969,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildSuccessState(TextTheme textTheme) {
     return _GlassCard(
       key: const ValueKey('success'),
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-      child: IntrinsicHeight(
+      padding: const EdgeInsets.all(20),
+      child: SizedBox(
+        height: 142,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Left: result info
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
-                    child: Text(
-                      _convertedAmount.toStringAsFixed(2),
-                      key: ValueKey(_convertedAmount.toStringAsFixed(2)),
-                      style: textTheme.displaySmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: -1,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _convertedAmount.toStringAsFixed(2),
+                        key: ValueKey(_convertedAmount.toStringAsFixed(2)),
+                        maxLines: 1,
+                        style: textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -1,
+                        ),
                       ),
                     ),
                   ),
@@ -876,12 +1053,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: Colors.white.withAlpha(20),
               margin: const EdgeInsets.symmetric(horizontal: 12),
             ),
-            // Right: rate table
+            // Right: rate table (always visible)
             _RateTable(
               rate: _rate!,
               fromCurrency: _fromCurrency,
               toCurrency: _toCurrency,
+              amounts: _quickRateAmounts,
+              onRemove: _removeQuickRate,
+              onReset: _resetQuickRates,
+              hasCustomRates: _hasCustomQuickRates,
             ),
+            // Amount history (when available)
+            if (_amountHistory.isNotEmpty) ...[
+              Container(
+                width: 1,
+                color: Colors.white.withAlpha(20),
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              _AmountHistoryPanel(
+                history: _amountHistory,
+                rate: _rate!,
+                fromCurrency: _fromCurrency,
+                toCurrency: _toCurrency,
+                onAmountSelected: (amount) {
+                  _amountController.text = _formatHistoryAmount(amount);
+                  setState(() {});
+                },
+                onClear: _clearAmountHistory,
+              ),
+            ],
           ],
         ),
       ),
@@ -898,28 +1098,98 @@ class _RateTable extends StatelessWidget {
     required this.rate,
     required this.fromCurrency,
     required this.toCurrency,
+    required this.amounts,
+    required this.onRemove,
+    required this.onReset,
+    required this.hasCustomRates,
   });
 
   final double rate;
   final String fromCurrency;
   final String toCurrency;
+  final List<int> amounts;
+  final ValueChanged<int> onRemove;
+  final VoidCallback onReset;
+  final bool hasCustomRates;
 
-  static const _amounts = [10, 50, 100, 250];
+  String _fmtSource(int v) {
+    if (v >= 1000000) {
+      final d = v / 1000000;
+      if (v % 1000000 == 0) return '${d.toStringAsFixed(0)}M';
+      return '~${d.toStringAsFixed(1)}M';
+    }
+    if (v >= 1000) {
+      final d = v / 1000;
+      if (v % 1000 == 0) return '${d.toStringAsFixed(0)}k';
+      return '~${d.toStringAsFixed(1)}k';
+    }
+    return '$v';
+  }
 
-  String _fmt(double v) {
-    if (v >= 10000) return '${(v / 1000).toStringAsFixed(0)}k';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
-    if (v >= 100) return v.toStringAsFixed(1);
+  String _fmtConverted(double v) {
+    if (v >= 1000000) {
+      final d = v / 1000000;
+      final exact = (v % 1000000) < 0.5;
+      final s = d >= 10 ? d.toStringAsFixed(0) : d.toStringAsFixed(1);
+      return exact ? '${s}M' : '~${s}M';
+    }
+    if (v >= 10000) {
+      final d = v / 1000;
+      final exact = (v % 1000) < 0.5;
+      final s = d.toStringAsFixed(0);
+      return exact ? '${s}k' : '~${s}k';
+    }
+    if (v >= 1000) {
+      final d = v / 1000;
+      final exact = (v % 1000) < 0.5;
+      final s = d.toStringAsFixed(1);
+      return exact ? '${s}k' : '~${s}k';
+    }
+    if (v >= 100) {
+      final rounded = double.parse(v.toStringAsFixed(1));
+      final approx = (v - rounded).abs() > 0.05;
+      return approx ? '~${v.toStringAsFixed(1)}' : v.toStringAsFixed(1);
+    }
     return v.toStringAsFixed(2);
   }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final labelStyle = textTheme.labelSmall?.copyWith(
+      color: Colors.white.withAlpha(102),
+      letterSpacing: 2,
+      fontWeight: FontWeight.w600,
+      fontSize: 9,
+    );
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisAlignment: MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Title (sticky)
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('QUICK RATES', style: labelStyle),
+            if (hasCustomRates) ...[
+              const SizedBox(width: 6),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onReset,
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    Icons.restart_alt_rounded,
+                    size: 12,
+                    color: Colors.white.withAlpha(102),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        // Column headers (sticky)
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -928,74 +1198,261 @@ class _RateTable extends StatelessWidget {
               child: Text(
                 fromCurrency,
                 textAlign: TextAlign.left,
-                style: textTheme.labelSmall?.copyWith(
-                  color: Colors.white.withAlpha(102),
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 9,
-                ),
+                style: labelStyle,
               ),
             ),
-            const SizedBox(width: 24), // divider gap
+            const SizedBox(width: 24),
             SizedBox(
               width: 44,
               child: Text(
                 toCurrency,
                 textAlign: TextAlign.right,
-                style: textTheme.labelSmall?.copyWith(
-                  color: Colors.white.withAlpha(102),
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 9,
-                ),
+                style: labelStyle,
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        ..._amounts.map((a) {
-          final converted = _fmt(a * rate);
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 28,
-                  child: Text(
-                    '$a',
-                    textAlign: TextAlign.left,
-                    style: textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withAlpha(90),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
-                    ),
+        // Scrollable rows
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: amounts.map((a) {
+                final converted = _fmtConverted(a * rate);
+                final source = _fmtSource(a);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 34,
+                        child: Text(
+                          source,
+                          textAlign: TextAlign.left,
+                          style: textTheme.labelSmall?.copyWith(
+                            color: Colors.white.withAlpha(90),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Container(
+                          width: 10,
+                          height: 1,
+                          color: Colors.white.withAlpha(30),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 48,
+                        child: Text(
+                          converted,
+                          textAlign: TextAlign.right,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onRemove(a),
+                        child: Padding(
+                          padding: const EdgeInsets.all(2),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 10,
+                            color: Colors.white.withAlpha(60),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Container(
-                    width: 12,
-                    height: 1,
-                    color: Colors.white.withAlpha(30),
-                  ),
-                ),
-                SizedBox(
-                  width: 44,
-                  child: Text(
-                    converted,
-                    textAlign: TextAlign.right,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
+                );
+              }).toList(),
             ),
-          );
-        }),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ===========================================================================
+// AMOUNT HISTORY PANEL
+// ===========================================================================
+
+/// Displays the per-pair history of searched amounts in the result card's
+/// right panel.  Each row is tappable to restore the amount into the input
+/// field.  A clear button removes all entries for the current pair.
+class _AmountHistoryPanel extends StatelessWidget {
+  const _AmountHistoryPanel({
+    required this.history,
+    required this.rate,
+    required this.fromCurrency,
+    required this.toCurrency,
+    required this.onAmountSelected,
+    required this.onClear,
+  });
+
+  final List<double> history;
+  final double rate;
+  final String fromCurrency;
+  final String toCurrency;
+  final ValueChanged<double> onAmountSelected;
+  final VoidCallback onClear;
+
+  /// Maximum number of history rows to render in the right panel.
+
+  String _fmtAmount(double v) {
+    if (v >= 1000000) {
+      final d = v / 1000000;
+      final exact = (v % 1000000) < 0.5;
+      final s = d >= 10 ? d.toStringAsFixed(0) : d.toStringAsFixed(1);
+      return exact ? '${s}M' : '~${s}M';
+    }
+    if (v >= 10000) {
+      final d = v / 1000;
+      final exact = (v % 1000) < 0.5;
+      final s = d.toStringAsFixed(0);
+      return exact ? '${s}k' : '~${s}k';
+    }
+    if (v >= 1000) {
+      final d = v / 1000;
+      final exact = (v % 1000) < 0.5;
+      final s = d.toStringAsFixed(1);
+      return exact ? '${s}k' : '~${s}k';
+    }
+    if (v >= 100) {
+      final rounded = double.parse(v.toStringAsFixed(1));
+      final approx = (v - rounded).abs() > 0.05;
+      return approx ? '~${v.toStringAsFixed(1)}' : v.toStringAsFixed(1);
+    }
+    return v.toStringAsFixed(2);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final labelStyle = textTheme.labelSmall?.copyWith(
+      color: Colors.white.withAlpha(102),
+      letterSpacing: 2,
+      fontWeight: FontWeight.w600,
+      fontSize: 9,
+    );
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section label + clear button
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('HISTORY', style: labelStyle),
+            const SizedBox(width: 6),
+            Semantics(
+              label: 'Clear amount history',
+              button: true,
+              child: GestureDetector(
+                onTap: onClear,
+                child: Icon(
+                  Icons.clear_all_rounded,
+                  size: 12,
+                  color: Colors.white.withAlpha(77),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        // Column headers
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 40,
+              child: Text(fromCurrency,
+                  textAlign: TextAlign.left, style: labelStyle),
+            ),
+            const SizedBox(width: 24),
+            SizedBox(
+              width: 44,
+              child: Text(toCurrency,
+                  textAlign: TextAlign.right, style: labelStyle),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Scrollable history rows
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: history.map((amount) {
+                final converted = _fmtAmount(amount * rate);
+                final amountStr = _fmtAmount(amount);
+                return Semantics(
+                  label:
+                      '$amountStr $fromCurrency = $converted $toCurrency, tap to use',
+                  button: true,
+                  child: GestureDetector(
+                    onTap: () => onAmountSelected(amount),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 40,
+                            child: Text(
+                              amountStr,
+                              textAlign: TextAlign.left,
+                              // labelSmall for the source amount (dimmer, smaller) —
+                              // intentionally matches _RateTable's FROM-column style.
+                              style: textTheme.labelSmall?.copyWith(
+                                color: Colors.white.withAlpha(179),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Container(
+                              width: 12,
+                              height: 1,
+                              color: Colors.white.withAlpha(30),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 44,
+                            child: Text(
+                              converted,
+                              textAlign: TextAlign.right,
+                              // bodySmall for the converted result (brighter, bolder) —
+                              // intentionally matches _RateTable's TO-column style.
+                              style: textTheme.bodySmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
       ],
     );
   }
