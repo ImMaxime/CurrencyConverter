@@ -1,34 +1,26 @@
 import 'dart:async';
+import 'dart:math' show pi;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'amount_history_service.dart';
+import 'app_colors.dart';
 import 'currency_service.dart';
 import 'favorites_service.dart';
+import 'format_utils.dart';
 import 'quick_rates_service.dart';
 import 'widget_service.dart';
 
-/// Gradient background colors for the mesh-like backdrop.
-const _kGradientColors = [
-  Color(0xFF0D0221),
-  Color(0xFF1A0533),
-  Color(0xFF2D1B69),
-  Color(0xFF1B1464),
-  Color(0xFF0F0C29),
-];
-
-/// Accent orbs for the animated gradient blobs.
-const _kOrbPurple = Color(0xFF7C4DFF);
-const _kOrbBlue = Color(0xFF448AFF);
-const _kOrbPink = Color(0xFFE040FB);
-
-/// Skeleton shimmer alpha range (min/max out of 255, ~4–12% opacity).
-const _kSkeletonAlphaMin = 10;
-const _kSkeletonAlphaMax = 30;
-
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({
+    super.key,
+    required this.isDark,
+    required this.onToggleTheme,
+  });
+
+  final bool isDark;
+  final VoidCallback onToggleTheme;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -66,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late final AnimationController _swapAnimController;
   late final AnimationController _bgAnimController;
   late final AnimationController _refreshAnimController;
+  late final AnimationController _themeAnimController;
 
   @override
   void initState() {
@@ -81,6 +74,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _refreshAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 750),
+    );
+    _themeAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+      value: widget.isDark ? 1.0 : 0.0,
     );
     _fetchRate();
     _loadBannerAd();
@@ -318,12 +316,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isDark != widget.isDark) {
+      if (widget.isDark) {
+        _themeAnimController.forward();
+      } else {
+        _themeAnimController.reverse();
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _historyTimer?.cancel();
     _amountController.dispose();
     _swapAnimController.dispose();
     _bgAnimController.dispose();
     _refreshAnimController.dispose();
+    _themeAnimController.dispose();
     _bannerAd?.dispose();
     super.dispose();
   }
@@ -331,6 +342,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final p = AppPalette.of(context);
 
     return Scaffold(
       // Banner ad anchored at the bottom
@@ -368,11 +380,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           HapticFeedback.mediumImpact();
                           await _fetchRate();
                         },
-                        // Refined, minimal indicator matching the glass dark theme
                         displacement: 48,
                         strokeWidth: 1.5,
-                        color: Colors.white.withAlpha(230),
-                        backgroundColor: Colors.white.withAlpha(20),
+                        color: p.refreshFg,
+                        backgroundColor: p.refreshBg,
                         child: ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           padding: EdgeInsets.symmetric(horizontal: hPad),
@@ -404,6 +415,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // -- Header --
 
   Widget _buildHeader(TextTheme textTheme) {
+    final p = AppPalette.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -414,7 +426,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               'Currex',
               style: textTheme.displayMedium?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: p.textPrimary,
                 letterSpacing: -0.5,
               ),
             ),
@@ -422,13 +434,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               'Currency Converter',
               style: textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w300,
-                color: Colors.white.withAlpha(128),
+                color: p.textMuted,
                 letterSpacing: 1.2,
               ),
             ),
           ],
         ),
         const Spacer(),
+        _buildThemeToggleButton(),
+        const SizedBox(width: 8),
         _buildFavoriteButton(),
         const SizedBox(width: 8),
         _buildRefreshButton(),
@@ -436,7 +450,72 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildThemeToggleButton() {
+    final p = AppPalette.of(context);
+    return Semantics(
+      label: widget.isDark ? 'Switch to light theme' : 'Switch to dark theme',
+      button: true,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          widget.onToggleTheme();
+        },
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: p.glassFill,
+            border: Border.all(color: p.glassBorder),
+          ),
+          child: AnimatedBuilder(
+            animation: _themeAnimController,
+            builder: (context, _) {
+              final t = _themeAnimController.value;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Sun (visible when t → 0, i.e. light mode)
+                  Opacity(
+                    opacity: (1 - t).clamp(0.0, 1.0),
+                    child: Transform.rotate(
+                      angle: t * pi,
+                      child: Transform.scale(
+                        scale: 1.0 - t * 0.4,
+                        child: const Icon(
+                          Icons.wb_sunny_rounded,
+                          color: Colors.amber,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Moon (visible when t → 1, i.e. dark mode)
+                  Opacity(
+                    opacity: t.clamp(0.0, 1.0),
+                    child: Transform.rotate(
+                      angle: (1 - t) * -pi,
+                      child: Transform.scale(
+                        scale: 0.6 + t * 0.4,
+                        child: Icon(
+                          Icons.nightlight_round,
+                          color: p.refreshFg,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFavoriteButton() {
+    final p = AppPalette.of(context);
     return Semantics(
       label: _isFavorite ? 'Remove from favorites' : 'Add to favorites',
       button: true,
@@ -449,13 +528,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: _isFavorite
-                ? Colors.amber.withAlpha(31)
-                : Colors.white.withAlpha(13),
+            color: _isFavorite ? Colors.amber.withAlpha(31) : p.glassFill,
             border: Border.all(
-              color: _isFavorite
-                  ? Colors.amber.withAlpha(102)
-                  : Colors.white.withAlpha(26),
+              color: _isFavorite ? Colors.amber.withAlpha(102) : p.glassBorder,
             ),
           ),
           child: Center(
@@ -464,9 +539,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Icon(
                 _isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
                 key: ValueKey(_isFavorite),
-                color: _isFavorite
-                    ? Colors.amber.withAlpha(230)
-                    : Colors.white.withAlpha(204),
+                color:
+                    _isFavorite ? Colors.amber.withAlpha(230) : p.iconPrimary,
                 size: 22,
               ),
             ),
@@ -477,6 +551,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildRefreshButton() {
+    final p = AppPalette.of(context);
     return Semantics(
       label: 'Refresh exchange rate',
       button: true,
@@ -495,15 +570,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withAlpha(13),
-              border: Border.all(color: Colors.white.withAlpha(26)),
+              color: p.glassFill,
+              border: Border.all(color: p.glassBorder),
             ),
             child: Center(
               child: RotationTransition(
                 turns: _refreshAnimController,
                 child: Icon(
                   Icons.refresh_rounded,
-                  color: Colors.white.withAlpha(204),
+                  color: p.iconPrimary,
                   size: 22,
                 ),
               ),
@@ -517,6 +592,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // -- Amount Card --
 
   Widget _buildAmountCard(TextTheme textTheme) {
+    final p = AppPalette.of(context);
     return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -526,7 +602,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Text(
                 'AMOUNT',
                 style: textTheme.labelSmall?.copyWith(
-                  color: Colors.white.withAlpha(128),
+                  color: p.textMuted,
                   letterSpacing: 2,
                   fontWeight: FontWeight.w600,
                 ),
@@ -544,13 +620,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       Icon(
                         Icons.add_circle_outline_rounded,
                         size: 14,
-                        color: Colors.white.withAlpha(128),
+                        color: p.textMuted,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         'QUICK RATE',
                         style: textTheme.labelSmall?.copyWith(
-                          color: Colors.white.withAlpha(128),
+                          color: p.textMuted,
                           fontSize: 10,
                         ),
                       ),
@@ -569,20 +645,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const TextInputType.numberWithOptions(decimal: true),
               style: textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: p.textPrimary,
               ),
-              cursorColor: _kOrbPurple,
+              cursorColor: AppColors.purple,
               decoration: InputDecoration(
                 hintText: '0.00',
                 hintStyle: textTheme.headlineMedium?.copyWith(
-                  color: Colors.white.withAlpha(38),
+                  color: p.textHint,
                   fontWeight: FontWeight.w300,
                 ),
                 prefixIcon: Container(
                   margin: const EdgeInsets.only(left: 12, right: 8),
                   child: Icon(
                     Icons.monetization_on_rounded,
-                    color: _kOrbPurple.withAlpha(204),
+                    color: AppColors.purple.withAlpha(204),
                     size: 28,
                   ),
                 ),
@@ -636,14 +712,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
                       colors: [
-                        _kOrbPurple.withAlpha(153),
-                        _kOrbBlue.withAlpha(153),
+                        AppColors.purple.withAlpha(153),
+                        AppColors.blue.withAlpha(153),
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     border: Border.all(
-                      color: Colors.white.withAlpha(31),
+                      color: AppPalette.of(context).glassBorder,
                     ),
                   ),
                   child: IconButton(
@@ -682,6 +758,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildFavoritesAndRecents(TextTheme textTheme) {
     if (_favorites.isEmpty && _recents.isEmpty) return const SizedBox.shrink();
+    final p = AppPalette.of(context);
 
     final nonFavRecents =
         _recents.where((pair) => !_favorites.contains(pair)).take(5).toList();
@@ -694,13 +771,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           if (_favorites.isNotEmpty) ...[
             Row(
               children: [
-                Icon(Icons.star_rounded,
-                    size: 14, color: Colors.white.withAlpha(128)),
+                Icon(Icons.star_rounded, size: 14, color: p.textMuted),
                 const SizedBox(width: 6),
                 Text(
                   'FAVORITES',
                   style: textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withAlpha(128),
+                    color: p.textMuted,
                     letterSpacing: 2,
                     fontWeight: FontWeight.w600,
                   ),
@@ -728,18 +804,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               nonFavRecents.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Container(height: 1, color: Colors.white.withAlpha(20)),
+              child: Container(height: 1, color: p.divider),
             ),
           if (_recents.isNotEmpty && nonFavRecents.isNotEmpty) ...[
             Row(
               children: [
-                Icon(Icons.history_rounded,
-                    size: 14, color: Colors.white.withAlpha(128)),
+                Icon(Icons.history_rounded, size: 14, color: p.textMuted),
                 const SizedBox(width: 6),
                 Text(
                   'RECENT',
                   style: textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withAlpha(128),
+                    color: p.textMuted,
                     letterSpacing: 2,
                     fontWeight: FontWeight.w600,
                   ),
@@ -822,6 +897,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildLoadingState(TextTheme textTheme) {
+    final p = AppPalette.of(context);
     return _GlassCard(
       key: const ValueKey('loading'),
       padding: const EdgeInsets.all(20),
@@ -846,7 +922,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             // Vertical divider
             Container(
               width: 1,
-              color: Colors.white.withAlpha(20),
+              color: p.divider,
               margin: const EdgeInsets.symmetric(horizontal: 12),
             ),
             // Right: mirrors rate table
@@ -877,6 +953,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildFavoritesLoadingState(TextTheme textTheme) {
+    final p = AppPalette.of(context);
     return _GlassCard(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -903,7 +980,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Container(height: 1, color: Colors.white.withAlpha(20)),
+            child: Container(height: 1, color: p.divider),
           ),
           // Recents section header
           const Row(
@@ -926,6 +1003,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildErrorState(TextTheme textTheme) {
+    final p = AppPalette.of(context);
     return _GlassCard(
       key: const ValueKey('error'),
       borderColor: Colors.red.withAlpha(77),
@@ -949,7 +1027,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             _error!,
             textAlign: TextAlign.center,
             style: textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withAlpha(179),
+              color: p.textMedium,
             ),
           ),
           const SizedBox(height: 20),
@@ -967,6 +1045,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildSuccessState(TextTheme textTheme) {
+    final p = AppPalette.of(context);
     return _GlassCard(
       key: const ValueKey('success'),
       padding: const EdgeInsets.all(20),
@@ -990,7 +1069,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         maxLines: 1,
                         style: textTheme.displaySmall?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                          color: p.textPrimary,
                           letterSpacing: -1,
                         ),
                       ),
@@ -1000,7 +1079,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   Text(
                     _toCurrency,
                     style: textTheme.titleMedium?.copyWith(
-                      color: _kOrbPurple.withAlpha(204),
+                      color: AppColors.purple.withAlpha(204),
                       fontWeight: FontWeight.w500,
                       letterSpacing: 2,
                     ),
@@ -1010,16 +1089,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(13),
+                      color: p.glassFill,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withAlpha(26)),
+                      border: Border.all(color: p.glassBorder),
                     ),
-                    child: Text(
-                      '1 $_fromCurrency = ${_rate?.toStringAsFixed(4) ?? '—'} $_toCurrency',
-                      textAlign: TextAlign.center,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withAlpha(179),
-                        fontWeight: FontWeight.w500,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '1 $_fromCurrency = ${_rate?.toStringAsFixed(2) ?? '—'} $_toCurrency',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: p.textMedium,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
@@ -1050,7 +1133,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             // Divider
             Container(
               width: 1,
-              color: Colors.white.withAlpha(20),
+              color: p.divider,
               margin: const EdgeInsets.symmetric(horizontal: 12),
             ),
             // Right: rate table (always visible)
@@ -1062,12 +1145,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               onRemove: _removeQuickRate,
               onReset: _resetQuickRates,
               hasCustomRates: _hasCustomQuickRates,
+              onAmountSelected: (amount) {
+                _amountController.text = amount.toString();
+                setState(() {});
+              },
             ),
             // Amount history (when available)
             if (_amountHistory.isNotEmpty) ...[
               Container(
                 width: 1,
-                color: Colors.white.withAlpha(20),
+                color: p.divider,
                 margin: const EdgeInsets.symmetric(horizontal: 12),
               ),
               _AmountHistoryPanel(
@@ -1102,6 +1189,7 @@ class _RateTable extends StatelessWidget {
     required this.onRemove,
     required this.onReset,
     required this.hasCustomRates,
+    required this.onAmountSelected,
   });
 
   final double rate;
@@ -1111,53 +1199,14 @@ class _RateTable extends StatelessWidget {
   final ValueChanged<int> onRemove;
   final VoidCallback onReset;
   final bool hasCustomRates;
-
-  String _fmtSource(int v) {
-    if (v >= 1000000) {
-      final d = v / 1000000;
-      if (v % 1000000 == 0) return '${d.toStringAsFixed(0)}M';
-      return '~${d.toStringAsFixed(1)}M';
-    }
-    if (v >= 1000) {
-      final d = v / 1000;
-      if (v % 1000 == 0) return '${d.toStringAsFixed(0)}k';
-      return '~${d.toStringAsFixed(1)}k';
-    }
-    return '$v';
-  }
-
-  String _fmtConverted(double v) {
-    if (v >= 1000000) {
-      final d = v / 1000000;
-      final exact = (v % 1000000) < 0.5;
-      final s = d >= 10 ? d.toStringAsFixed(0) : d.toStringAsFixed(1);
-      return exact ? '${s}M' : '~${s}M';
-    }
-    if (v >= 10000) {
-      final d = v / 1000;
-      final exact = (v % 1000) < 0.5;
-      final s = d.toStringAsFixed(0);
-      return exact ? '${s}k' : '~${s}k';
-    }
-    if (v >= 1000) {
-      final d = v / 1000;
-      final exact = (v % 1000) < 0.5;
-      final s = d.toStringAsFixed(1);
-      return exact ? '${s}k' : '~${s}k';
-    }
-    if (v >= 100) {
-      final rounded = double.parse(v.toStringAsFixed(1));
-      final approx = (v - rounded).abs() > 0.05;
-      return approx ? '~${v.toStringAsFixed(1)}' : v.toStringAsFixed(1);
-    }
-    return v.toStringAsFixed(2);
-  }
+  final ValueChanged<int> onAmountSelected;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final p = AppPalette.of(context);
     final labelStyle = textTheme.labelSmall?.copyWith(
-      color: Colors.white.withAlpha(102),
+      color: p.textMuted,
       letterSpacing: 2,
       fontWeight: FontWeight.w600,
       fontSize: 9,
@@ -1181,7 +1230,7 @@ class _RateTable extends StatelessWidget {
                   child: Icon(
                     Icons.restart_alt_rounded,
                     size: 12,
-                    color: Colors.white.withAlpha(102),
+                    color: p.textMuted,
                   ),
                 ),
               ),
@@ -1219,59 +1268,63 @@ class _RateTable extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: amounts.map((a) {
-                final converted = _fmtConverted(a * rate);
-                final source = _fmtSource(a);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 34,
-                        child: Text(
-                          source,
-                          textAlign: TextAlign.left,
-                          style: textTheme.labelSmall?.copyWith(
-                            color: Colors.white.withAlpha(90),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w400,
+                final converted = formatCompactAmount(a * rate);
+                final source = formatCompactInt(a);
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onAmountSelected(a),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 34,
+                          child: Text(
+                            source,
+                            textAlign: TextAlign.left,
+                            style: textTheme.labelSmall?.copyWith(
+                              color: p.textMuted,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w400,
+                            ),
                           ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Container(
-                          width: 10,
-                          height: 1,
-                          color: Colors.white.withAlpha(30),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 48,
-                        child: Text(
-                          converted,
-                          textAlign: TextAlign.right,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Container(
+                            width: 10,
+                            height: 1,
+                            color: p.glassBorder,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => onRemove(a),
-                        child: Padding(
-                          padding: const EdgeInsets.all(2),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 10,
-                            color: Colors.white.withAlpha(60),
+                        SizedBox(
+                          width: 48,
+                          child: Text(
+                            converted,
+                            textAlign: TextAlign.right,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: p.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => onRemove(a),
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 10,
+                              color: p.iconDim,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }).toList(),
@@ -1307,40 +1360,12 @@ class _AmountHistoryPanel extends StatelessWidget {
   final ValueChanged<double> onAmountSelected;
   final VoidCallback onClear;
 
-  /// Maximum number of history rows to render in the right panel.
-
-  String _fmtAmount(double v) {
-    if (v >= 1000000) {
-      final d = v / 1000000;
-      final exact = (v % 1000000) < 0.5;
-      final s = d >= 10 ? d.toStringAsFixed(0) : d.toStringAsFixed(1);
-      return exact ? '${s}M' : '~${s}M';
-    }
-    if (v >= 10000) {
-      final d = v / 1000;
-      final exact = (v % 1000) < 0.5;
-      final s = d.toStringAsFixed(0);
-      return exact ? '${s}k' : '~${s}k';
-    }
-    if (v >= 1000) {
-      final d = v / 1000;
-      final exact = (v % 1000) < 0.5;
-      final s = d.toStringAsFixed(1);
-      return exact ? '${s}k' : '~${s}k';
-    }
-    if (v >= 100) {
-      final rounded = double.parse(v.toStringAsFixed(1));
-      final approx = (v - rounded).abs() > 0.05;
-      return approx ? '~${v.toStringAsFixed(1)}' : v.toStringAsFixed(1);
-    }
-    return v.toStringAsFixed(2);
-  }
-
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final p = AppPalette.of(context);
     final labelStyle = textTheme.labelSmall?.copyWith(
-      color: Colors.white.withAlpha(102),
+      color: p.textMuted,
       letterSpacing: 2,
       fontWeight: FontWeight.w600,
       fontSize: 9,
@@ -1364,7 +1389,7 @@ class _AmountHistoryPanel extends StatelessWidget {
                 child: Icon(
                   Icons.clear_all_rounded,
                   size: 12,
-                  color: Colors.white.withAlpha(77),
+                  color: p.iconDim,
                 ),
               ),
             ),
@@ -1395,8 +1420,8 @@ class _AmountHistoryPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: history.map((amount) {
-                final converted = _fmtAmount(amount * rate);
-                final amountStr = _fmtAmount(amount);
+                final converted = formatCompactAmount(amount * rate);
+                final amountStr = formatCompactAmount(amount);
                 return Semantics(
                   label:
                       '$amountStr $fromCurrency = $converted $toCurrency, tap to use',
@@ -1416,7 +1441,7 @@ class _AmountHistoryPanel extends StatelessWidget {
                               // labelSmall for the source amount (dimmer, smaller) —
                               // intentionally matches _RateTable's FROM-column style.
                               style: textTheme.labelSmall?.copyWith(
-                                color: Colors.white.withAlpha(179),
+                                color: p.textMedium,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w400,
                               ),
@@ -1427,7 +1452,7 @@ class _AmountHistoryPanel extends StatelessWidget {
                             child: Container(
                               width: 12,
                               height: 1,
-                              color: Colors.white.withAlpha(30),
+                              color: p.glassBorder,
                             ),
                           ),
                           SizedBox(
@@ -1438,7 +1463,7 @@ class _AmountHistoryPanel extends StatelessWidget {
                               // bodySmall for the converted result (brighter, bolder) —
                               // intentionally matches _RateTable's TO-column style.
                               style: textTheme.bodySmall?.copyWith(
-                                color: Colors.white,
+                                color: p.textPrimary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 11,
                               ),
@@ -1496,18 +1521,19 @@ class _SkeletonLineState extends State<_SkeletonLine>
 
   @override
   Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
     return AnimatedBuilder(
       animation: _anim,
       builder: (context, child) {
-        final alpha =
-            lerpDouble(_kSkeletonAlphaMin, _kSkeletonAlphaMax, _anim.value)!
-                .round();
+        final alpha = lerpDouble(AppColors.skeletonAlphaMin,
+                AppColors.skeletonAlphaMax, _anim.value)!
+            .round();
         return Container(
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.height / 2),
-            color: Colors.white.withAlpha(alpha),
+            color: p.textPrimary.withAlpha(alpha),
           ),
         );
       },
@@ -1532,6 +1558,7 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
@@ -1539,14 +1566,14 @@ class _GlassCard extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: Colors.white.withAlpha(13), // ~5% opacity
+            color: p.glassFill,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: borderColor ?? Colors.white.withAlpha(26), // ~10%
+              color: borderColor ?? p.glassBorder,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(26),
+                color: p.shadowColor,
                 blurRadius: 32,
                 offset: const Offset(0, 8),
               ),
@@ -1573,12 +1600,13 @@ class _GlassButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Material(
-          color: Colors.white.withAlpha(18),
+          color: p.divider,
           borderRadius: BorderRadius.circular(16),
           child: InkWell(
             onTap: onPressed,
@@ -1587,17 +1615,17 @@ class _GlassButton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withAlpha(31)),
+                border: Border.all(color: p.glassBorder),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 18, color: Colors.white.withAlpha(204)),
+                  Icon(icon, size: 18, color: p.iconPrimary),
                   const SizedBox(width: 8),
                   Text(
                     label,
                     style: TextStyle(
-                      color: Colors.white.withAlpha(204),
+                      color: p.textHigh,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1626,6 +1654,7 @@ class _GlassCurrencyPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final p = AppPalette.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1633,7 +1662,7 @@ class _GlassCurrencyPicker extends StatelessWidget {
         Text(
           label,
           style: textTheme.labelSmall?.copyWith(
-            color: Colors.white.withAlpha(102),
+            color: p.textMuted,
             letterSpacing: 2,
             fontWeight: FontWeight.w600,
           ),
@@ -1644,9 +1673,9 @@ class _GlassCurrencyPicker extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withAlpha(10),
+              color: p.glassFill,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withAlpha(20)),
+              border: Border.all(color: p.divider),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
@@ -1654,13 +1683,13 @@ class _GlassCurrencyPicker extends StatelessWidget {
                 isExpanded: true,
                 icon: Icon(
                   Icons.keyboard_arrow_down_rounded,
-                  color: Colors.white.withAlpha(102),
+                  color: p.textMuted,
                   size: 20,
                 ),
-                dropdownColor: const Color(0xFF1A1235),
+                dropdownColor: p.dropdownColor,
                 borderRadius: BorderRadius.circular(16),
                 style: textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
+                  color: p.textPrimary,
                   fontWeight: FontWeight.w600,
                 ),
                 items: CurrencyService.currencies
@@ -1702,6 +1731,7 @@ class _PairChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final fromFlag = CurrencyService.currencyFlags[pair.from] ?? '';
     final toFlag = CurrencyService.currencyFlags[pair.to] ?? '';
+    final p = AppPalette.of(context);
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -1716,13 +1746,10 @@ class _PairChip extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
-              color: highlight
-                  ? _kOrbPurple.withAlpha(51)
-                  : Colors.white.withAlpha(13),
+              color: highlight ? AppColors.purple.withAlpha(51) : p.glassFill,
               border: Border.all(
-                color: highlight
-                    ? _kOrbPurple.withAlpha(128)
-                    : Colors.white.withAlpha(26),
+                color:
+                    highlight ? AppColors.purple.withAlpha(128) : p.glassBorder,
               ),
             ),
             child: Row(
@@ -1731,7 +1758,7 @@ class _PairChip extends StatelessWidget {
                 Text(
                   '$fromFlag ${pair.from}',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: p.textPrimary,
                     fontSize: 13,
                     fontWeight: highlight ? FontWeight.w600 : FontWeight.w400,
                   ),
@@ -1741,13 +1768,13 @@ class _PairChip extends StatelessWidget {
                   child: Icon(
                     Icons.arrow_forward_rounded,
                     size: 12,
-                    color: Colors.white.withAlpha(128),
+                    color: p.textMuted,
                   ),
                 ),
                 Text(
                   '$toFlag ${pair.to}',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: p.textPrimary,
                     fontSize: 13,
                     fontWeight: highlight ? FontWeight.w600 : FontWeight.w400,
                   ),
@@ -1758,7 +1785,7 @@ class _PairChip extends StatelessWidget {
                   child: Icon(
                     Icons.close_rounded,
                     size: 14,
-                    color: Colors.white.withAlpha(128),
+                    color: p.textMuted,
                   ),
                 ),
               ],
@@ -1792,6 +1819,7 @@ class _RecentRow extends StatelessWidget {
     final fromFlag = CurrencyService.currencyFlags[pair.from] ?? '';
     final toFlag = CurrencyService.currencyFlags[pair.to] ?? '';
     final textTheme = Theme.of(context).textTheme;
+    final p = AppPalette.of(context);
 
     return Semantics(
       label: '${pair.from} to ${pair.to} recent search',
@@ -1806,13 +1834,13 @@ class _RecentRow extends StatelessWidget {
               Icon(
                 Icons.history_rounded,
                 size: 14,
-                color: Colors.white.withAlpha(77),
+                color: p.iconDim,
               ),
               const SizedBox(width: 10),
               Text(
                 '$fromFlag ${pair.from}',
                 style: textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withAlpha(active ? 255 : 179),
+                  color: active ? p.textPrimary : p.textMedium,
                   fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
@@ -1821,13 +1849,13 @@ class _RecentRow extends StatelessWidget {
                 child: Icon(
                   Icons.arrow_forward_rounded,
                   size: 12,
-                  color: Colors.white.withAlpha(77),
+                  color: p.iconDim,
                 ),
               ),
               Text(
                 '$toFlag ${pair.to}',
                 style: textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withAlpha(active ? 255 : 179),
+                  color: active ? p.textPrimary : p.textMedium,
                   fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
@@ -1839,7 +1867,7 @@ class _RecentRow extends StatelessWidget {
                   margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _kOrbPurple.withAlpha(204),
+                    color: AppColors.purple.withAlpha(204),
                   ),
                 ),
               Semantics(
@@ -1850,8 +1878,7 @@ class _RecentRow extends StatelessWidget {
                   iconSize: 16,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  color: Theme.of(context).colorScheme.onSurface.withAlpha(153),
                   onPressed: onRemove,
                 ),
               ),
@@ -1867,7 +1894,7 @@ class _RecentRow extends StatelessWidget {
 // ANIMATED BACKGROUND
 // ===========================================================================
 
-/// Animated background with a dark gradient and floating color orbs.
+/// Animated background with a gradient and floating color orbs.
 class _AnimatedGradientBackground extends StatelessWidget {
   const _AnimatedGradientBackground({required this.controller});
 
@@ -1875,17 +1902,24 @@ class _AnimatedGradientBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final gradientColors =
+        isDark ? AppColors.darkGradient : AppColors.lightGradient;
+    final orbAlpha = isDark ? 1.0 : 0.5;
+
     return AnimatedBuilder(
       animation: controller,
       builder: (context, child) {
         final t = controller.value;
-        return Container(
-          decoration: const BoxDecoration(
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: _kGradientColors,
-              stops: [0.0, 0.2, 0.45, 0.7, 1.0],
+              colors: gradientColors,
+              stops: const [0.0, 0.2, 0.45, 0.7, 1.0],
             ),
           ),
           child: Stack(
@@ -1896,7 +1930,7 @@ class _AnimatedGradientBackground extends StatelessWidget {
                 right: -40 + (30 * t),
                 child: _Orb(
                   size: 260,
-                  color: _kOrbPurple.withAlpha(51),
+                  color: AppColors.purple.withAlpha((51 * orbAlpha).round()),
                   blur: 80,
                 ),
               ),
@@ -1906,7 +1940,7 @@ class _AnimatedGradientBackground extends StatelessWidget {
                 left: -60 + (25 * t),
                 child: _Orb(
                   size: 200,
-                  color: _kOrbBlue.withAlpha(38),
+                  color: AppColors.blue.withAlpha((38 * orbAlpha).round()),
                   blur: 70,
                 ),
               ),
@@ -1916,7 +1950,7 @@ class _AnimatedGradientBackground extends StatelessWidget {
                 right: 20 - (20 * t),
                 child: _Orb(
                   size: 180,
-                  color: _kOrbPink.withAlpha(31),
+                  color: AppColors.pink.withAlpha((31 * orbAlpha).round()),
                   blur: 60,
                 ),
               ),
