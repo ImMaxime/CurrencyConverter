@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'amount_history_service.dart';
 import 'app_colors.dart';
 import 'currency_service.dart';
@@ -80,7 +81,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 300),
       value: widget.isDark ? 1.0 : 0.0,
     );
-    _fetchRate();
+    _loadLastCurrencies();
     _loadBannerAd();
     _loadFavoritesAndRecents();
     _amountController.addListener(_onAmountChanged);
@@ -103,6 +104,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     )..load();
   }
 
+  static const _lastFromKey = 'last_from_currency';
+  static const _lastToKey = 'last_to_currency';
+
+  Future<void> _loadLastCurrencies() async {
+    final prefs = await SharedPreferences.getInstance();
+    final from = prefs.getString(_lastFromKey);
+    final to = prefs.getString(_lastToKey);
+    if (from != null && to != null && mounted) {
+      setState(() {
+        _fromCurrency = from;
+        _toCurrency = to;
+      });
+    }
+    _fetchRate();
+  }
+
+  Future<void> _saveLastCurrencies() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastFromKey, _fromCurrency);
+    await prefs.setString(_lastToKey, _toCurrency);
+  }
+
   Future<void> _fetchRate() async {
     setState(() {
       _loading = true;
@@ -110,6 +133,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _usingCache = false;
     });
     _startRefreshAnimation();
+
+    unawaited(_saveLastCurrencies());
 
     final result = await _currencyService.fetchRate(_fromCurrency, _toCurrency);
 
