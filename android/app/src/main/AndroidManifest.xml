@@ -25,16 +25,43 @@
             </intent-filter>
         </activity>
 
-        <!-- Home Screen Widget Receiver -->
+        <!-- Home Screen Widget Receiver (Dark) -->
         <receiver
             android:name=".CurrencyWidgetReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:label="Currex Dark">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/currency_widget_info" />
+        </receiver>
+
+        <!-- Home Screen Widget Receiver (Light) -->
+        <receiver
+            android:name=".CurrencyWidgetLightReceiver"
+            android:exported="true"
+            android:label="Currex Light">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/currency_widget_light_info" />
+        </receiver>
+
+        <!-- Home Screen Widget Receiver (Auto — adapts to system theme) -->
+        <receiver
+            android:name=".CurrencyWidgetAutoReceiver"
+            android:exported="true"
+            android:label="Currex Auto">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/currency_widget_auto_info" />
         </receiver>
 
         <meta-data

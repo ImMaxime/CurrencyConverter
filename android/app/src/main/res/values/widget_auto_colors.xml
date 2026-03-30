@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Auto-theme widget colors — light mode -->
+    <color name="widget_auto_text_primary">#FF1B1340</color>
+    <color name="widget_auto_text_accent">#FF7C4DFF</color>
+    <color name="widget_auto_text_muted">#801B1340</color>
+    <color name="widget_auto_text_muted2">#661B1340</color>
+    <color name="widget_auto_text_muted3">#4D1B1340</color>
+    <color name="widget_auto_text_table">#CC1B1340</color>
+    <color name="widget_auto_swap_tint">#CC7C4DFF</color>
+    <color name="widget_auto_swap_icon">#FFFFFFFF</color>
+
+    <!-- Widget picker descriptions -->
+    <string name="widget_dark_description">Currency rates with a dark theme</string>
+    <string name="widget_light_description">Currency rates with a light theme</string>
+    <string name="widget_auto_description">Currency rates that adapt to your phone theme</string>
+</resources>

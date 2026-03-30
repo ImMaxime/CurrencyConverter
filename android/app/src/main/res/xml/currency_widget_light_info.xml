@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:initialKeyguardLayout="@layout/currency_widget_small"
-    android:initialLayout="@layout/currency_widget_layout"
+    android:initialKeyguardLayout="@layout/currency_widget_light_small"
+    android:initialLayout="@layout/currency_widget_light_layout"
     android:minWidth="110dp"
     android:minHeight="40dp"
     android:targetCellWidth="2"
@@ -11,5 +11,5 @@
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen"
-    android:previewLayout="@layout/currency_widget_layout"
-    android:description="@string/widget_dark_description" />
+    android:previewLayout="@layout/currency_widget_light_layout"
+    android:description="@string/widget_light_description" />
