@@ -30,8 +30,16 @@ class WidgetService {
       )),
     ]);
 
-    await HomeWidget.updateWidget(
-      androidName: 'CurrencyWidgetReceiver',
-    );
+    await Future.wait([
+      HomeWidget.updateWidget(
+        androidName: 'CurrencyWidgetReceiver',
+      ),
+      HomeWidget.updateWidget(
+        androidName: 'CurrencyWidgetLightReceiver',
+      ),
+      HomeWidget.updateWidget(
+        androidName: 'CurrencyWidgetAutoReceiver',
+      ),
+    ]);
   }
 }

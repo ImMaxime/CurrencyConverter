@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Auto-theme widget colors — dark mode -->
+    <color name="widget_auto_text_primary">#FFFFFFFF</color>
+    <color name="widget_auto_text_accent">#CC7C4DFF</color>
+    <color name="widget_auto_text_muted">#80FFFFFF</color>
+    <color name="widget_auto_text_muted2">#66FFFFFF</color>
+    <color name="widget_auto_text_muted3">#4DFFFFFF</color>
+    <color name="widget_auto_text_table">#CCFFFFFF</color>
+    <color name="widget_auto_swap_tint">#997C4DFF</color>
+    <color name="widget_auto_swap_icon">#FFFFFFFF</color>
+</resources>
