@@ -541,6 +541,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildFavoriteButton() {
     final p = AppPalette.of(context);
+    final isLight = Theme.of(context).brightness == Brightness.light;
     return Semantics(
       label: _isFavorite ? 'Remove from favorites' : 'Add to favorites',
       button: true,
@@ -553,9 +554,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: _isFavorite ? Colors.amber.withAlpha(31) : p.glassFill,
+            color: _isFavorite
+                ? (isLight ? Colors.white : Colors.amber.withAlpha(31))
+                : p.glassFill,
             border: Border.all(
-              color: _isFavorite ? Colors.amber.withAlpha(102) : p.iconDim,
+              color: _isFavorite
+                  ? (isLight ? Colors.amber : Colors.amber.withAlpha(102))
+                  : p.iconDim,
             ),
           ),
           child: Center(
@@ -564,8 +569,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Icon(
                 _isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
                 key: ValueKey(_isFavorite),
-                color:
-                    _isFavorite ? Colors.amber.withAlpha(230) : p.iconPrimary,
+                color: _isFavorite ? Colors.amber : p.iconPrimary,
                 size: 22,
               ),
             ),
@@ -1074,127 +1078,129 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return _GlassCard(
       key: const ValueKey('success'),
       padding: const EdgeInsets.all(20),
-      child: SizedBox(
-        height: 142,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Left: result info
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _convertedAmount.toStringAsFixed(2),
-                        key: ValueKey(_convertedAmount.toStringAsFixed(2)),
-                        maxLines: 1,
-                        style: textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: p.textPrimary,
-                          letterSpacing: -1,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _toCurrency,
-                    style: textTheme.titleMedium?.copyWith(
-                      color: AppColors.purple.withAlpha(204),
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: p.glassFill,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: p.glassBorder),
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '1 $_fromCurrency = ${_rate?.toStringAsFixed(2) ?? '—'} $_toCurrency',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: p.textMedium,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_usingCache) ...[
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.offline_bolt_rounded,
-                          size: 12,
-                          color: Colors.amber.withAlpha(179),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Cached rate',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: Colors.amber.withAlpha(179),
-                            fontSize: 11,
+      child: IntrinsicHeight(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 142),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Left: result info
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          _convertedAmount.toStringAsFixed(2),
+                          key: ValueKey(_convertedAmount.toStringAsFixed(2)),
+                          maxLines: 1,
+                          style: textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: p.textPrimary,
+                            letterSpacing: -1,
                           ),
                         ),
-                      ],
+                      ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _toCurrency,
+                      style: textTheme.titleMedium?.copyWith(
+                        color: AppColors.purple.withAlpha(204),
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: p.glassFill,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: p.glassBorder),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '1 $_fromCurrency = ${_rate?.toStringAsFixed(2) ?? '—'} $_toCurrency',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: p.textMedium,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_usingCache) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.offline_bolt_rounded,
+                            size: 12,
+                            color: Colors.amber.withAlpha(179),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Cached rate',
+                            style: textTheme.bodySmall?.copyWith(
+                              color: Colors.amber.withAlpha(179),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            // Divider
-            Container(
-              width: 1,
-              color: p.divider,
-              margin: const EdgeInsets.symmetric(horizontal: 12),
-            ),
-            // Right: rate table (always visible)
-            _RateTable(
-              rate: _rate!,
-              fromCurrency: _fromCurrency,
-              toCurrency: _toCurrency,
-              amounts: _quickRateAmounts,
-              onRemove: _removeQuickRate,
-              onReset: _resetQuickRates,
-              hasCustomRates: _hasCustomQuickRates,
-              onAmountSelected: (amount) {
-                _amountController.text = amount.toString();
-                setState(() {});
-              },
-            ),
-            // Amount history (when available)
-            if (_amountHistory.isNotEmpty) ...[
+              // Divider
               Container(
                 width: 1,
                 color: p.divider,
                 margin: const EdgeInsets.symmetric(horizontal: 12),
               ),
-              _AmountHistoryPanel(
-                history: _amountHistory,
+              // Right: rate table (always visible)
+              _RateTable(
                 rate: _rate!,
                 fromCurrency: _fromCurrency,
                 toCurrency: _toCurrency,
+                amounts: _quickRateAmounts,
+                onRemove: _removeQuickRate,
+                onReset: _resetQuickRates,
+                hasCustomRates: _hasCustomQuickRates,
                 onAmountSelected: (amount) {
-                  _amountController.text = _formatHistoryAmount(amount);
+                  _amountController.text = amount.toString();
                   setState(() {});
                 },
-                onClear: _clearAmountHistory,
               ),
+              // Amount history (when available)
+              if (_amountHistory.isNotEmpty) ...[
+                Container(
+                  width: 1,
+                  color: p.divider,
+                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+                _AmountHistoryPanel(
+                  history: _amountHistory,
+                  rate: _rate!,
+                  fromCurrency: _fromCurrency,
+                  toCurrency: _toCurrency,
+                  onAmountSelected: (amount) {
+                    _amountController.text = _formatHistoryAmount(amount);
+                    setState(() {});
+                  },
+                  onClear: _clearAmountHistory,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1287,74 +1293,70 @@ class _RateTable extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        // Scrollable rows
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: amounts.map((a) {
-                final converted = formatCompactAmount(a * rate);
-                final source = formatCompactInt(a);
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onAmountSelected(a),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 34,
-                          child: Text(
-                            source,
-                            textAlign: TextAlign.left,
-                            style: textTheme.labelSmall?.copyWith(
-                              color: p.textMuted,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
+        // Rate rows
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: amounts.map((a) {
+            final converted = formatCompactAmount(a * rate);
+            final source = formatCompactInt(a);
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onAmountSelected(a),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 34,
+                      child: Text(
+                        source,
+                        textAlign: TextAlign.left,
+                        style: textTheme.labelSmall?.copyWith(
+                          color: p.textMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w400,
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Container(
-                            width: 10,
-                            height: 1,
-                            color: p.glassBorder,
-                          ),
-                        ),
-                        SizedBox(
-                          width: 48,
-                          child: Text(
-                            converted,
-                            textAlign: TextAlign.right,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: p.textPrimary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => onRemove(a),
-                          child: Padding(
-                            padding: const EdgeInsets.all(2),
-                            child: Icon(
-                              Icons.close_rounded,
-                              size: 10,
-                              color: p.iconDim,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Container(
+                        width: 10,
+                        height: 1,
+                        color: p.glassBorder,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 48,
+                      child: Text(
+                        converted,
+                        textAlign: TextAlign.right,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: p.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onRemove(a),
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 10,
+                          color: p.iconDim,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
@@ -1396,114 +1398,112 @@ class _AmountHistoryPanel extends StatelessWidget {
       fontSize: 9,
     );
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section label + clear button
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('HISTORY', style: labelStyle),
-            const SizedBox(width: 6),
-            Semantics(
-              label: 'Clear amount history',
-              button: true,
-              child: GestureDetector(
-                onTap: onClear,
-                child: Icon(
-                  Icons.delete_sweep_rounded,
-                  size: 12,
-                  color: p.iconDim,
+    return SizedBox(
+      width: 108,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section label + clear button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('HISTORY', style: labelStyle),
+              Semantics(
+                label: 'Clear amount history',
+                button: true,
+                child: GestureDetector(
+                  onTap: onClear,
+                  child: Icon(
+                    Icons.delete_sweep_rounded,
+                    size: 12,
+                    color: p.iconDim,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        // Column headers
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 40,
-              child: Text(fromCurrency,
-                  textAlign: TextAlign.left, style: labelStyle),
-            ),
-            const SizedBox(width: 24),
-            SizedBox(
-              width: 44,
-              child: Text(toCurrency,
-                  textAlign: TextAlign.right, style: labelStyle),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // Scrollable history rows
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: history.map((amount) {
-                final converted = formatCompactAmount(amount * rate);
-                final amountStr = formatCompactAmount(amount);
-                return Semantics(
-                  label:
-                      '$amountStr $fromCurrency = $converted $toCurrency, tap to use',
-                  button: true,
-                  child: GestureDetector(
-                    onTap: () => onAmountSelected(amount),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 40,
-                            child: Text(
-                              amountStr,
-                              textAlign: TextAlign.left,
-                              // labelSmall for the source amount (dimmer, smaller) —
-                              // intentionally matches _RateTable's FROM-column style.
-                              style: textTheme.labelSmall?.copyWith(
-                                color: p.textMedium,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w400,
-                              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // Column headers
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 40,
+                child: Text(fromCurrency,
+                    textAlign: TextAlign.left, style: labelStyle),
+              ),
+              const SizedBox(width: 24),
+              SizedBox(
+                width: 44,
+                child: Text(toCurrency,
+                    textAlign: TextAlign.right, style: labelStyle),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // History rows
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: history.map((amount) {
+              final converted = formatCompactAmount(amount * rate);
+              final amountStr = formatCompactAmount(amount);
+              return Semantics(
+                label:
+                    '$amountStr $fromCurrency = $converted $toCurrency, tap to use',
+                button: true,
+                child: GestureDetector(
+                  onTap: () => onAmountSelected(amount),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 40,
+                          child: Text(
+                            amountStr,
+                            textAlign: TextAlign.left,
+                            // labelSmall for the source amount (dimmer, smaller) —
+                            // intentionally matches _RateTable's FROM-column style.
+                            style: textTheme.labelSmall?.copyWith(
+                              color: p.textMedium,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Container(
-                              width: 12,
-                              height: 1,
-                              color: p.glassBorder,
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Container(
+                            width: 12,
+                            height: 1,
+                            color: p.glassBorder,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 44,
+                          child: Text(
+                            converted,
+                            textAlign: TextAlign.right,
+                            // bodySmall for the converted result (brighter, bolder) —
+                            // intentionally matches _RateTable's TO-column style.
+                            style: textTheme.bodySmall?.copyWith(
+                              color: p.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
                             ),
                           ),
-                          SizedBox(
-                            width: 44,
-                            child: Text(
-                              converted,
-                              textAlign: TextAlign.right,
-                              // bodySmall for the converted result (brighter, bolder) —
-                              // intentionally matches _RateTable's TO-column style.
-                              style: textTheme.bodySmall?.copyWith(
-                                color: p.textPrimary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              }).toList(),
-            ),
+                ),
+              );
+            }).toList(),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
