@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'app_colors.dart';
 import 'home_screen.dart';
 
@@ -19,13 +20,33 @@ class CurrencyConverterApp extends StatefulWidget {
 }
 
 class _CurrencyConverterAppState extends State<CurrencyConverterApp> {
+  static const _themeKey = 'last_theme_dark';
   ThemeMode _themeMode = ThemeMode.dark;
 
-  void _toggleTheme() {
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isDark = prefs.getBool(_themeKey);
+    if (isDark != null && mounted) {
+      setState(() {
+        _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+      });
+    }
+  }
+
+  void _toggleTheme() async {
+    final newMode =
+        _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     setState(() {
-      _themeMode =
-          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      _themeMode = newMode;
     });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_themeKey, newMode == ThemeMode.dark);
   }
 
   static InputDecorationTheme _inputDecoration(Brightness brightness) {
