@@ -67,7 +67,8 @@ class FavoritesService {
       try {
         pairs.add(CurrencyPair.fromJson(jsonDecode(e) as Map<String, dynamic>));
       } catch (err, stack) {
-        debugPrint('FavoritesService: skipping invalid entry for key "$key": $err\n$stack');
+        debugPrint(
+            'FavoritesService: skipping invalid entry for key "$key": $err\n$stack');
       }
     }
     if (pairs.length != raw.length) {
