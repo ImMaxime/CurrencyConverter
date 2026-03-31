@@ -555,7 +555,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             shape: BoxShape.circle,
             color: _isFavorite ? Colors.amber.withAlpha(31) : p.glassFill,
             border: Border.all(
-              color: _isFavorite ? Colors.amber.withAlpha(102) : p.glassBorder,
+              color: _isFavorite ? Colors.amber.withAlpha(102) : p.iconDim,
             ),
           ),
           child: Center(
@@ -1412,7 +1412,7 @@ class _AmountHistoryPanel extends StatelessWidget {
               child: GestureDetector(
                 onTap: onClear,
                 child: Icon(
-                  Icons.clear_all_rounded,
+                  Icons.delete_sweep_rounded,
                   size: 12,
                   color: p.iconDim,
                 ),
